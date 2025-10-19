@@ -29,10 +29,21 @@ interface Attachment {
   mime_type: string | null;
 }
 
+interface Reaction {
+  ROWID: number;
+  associated_message_type: number;
+  handle_id: number | null;
+  is_from_me: number;
+  date: number;
+  sender_id: string | null;
+  reaction_type: string;
+}
+
 interface MessageWithAttachments {
   message: Message;
   handle: Handle | null;
   attachments: Attachment[];
+  reactions?: Reaction[];
 }
 
 interface ConversationDetails {
@@ -314,6 +325,7 @@ export default function ConversationPage() {
                         message={messageData.message}
                         handle={messageData.handle}
                         attachments={messageData.attachments}
+                        reactions={messageData.reactions}
                         dbPath={dbPath}
                         attachmentsPath={attachmentsPath}
                         showTimestamp={showTimestamp}

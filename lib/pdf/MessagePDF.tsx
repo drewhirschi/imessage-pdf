@@ -24,10 +24,21 @@ interface Attachment {
   mime_type: string | null;
 }
 
+interface Reaction {
+  ROWID: number;
+  associated_message_type: number;
+  handle_id: number | null;
+  is_from_me: number;
+  date: number;
+  sender_id: string | null;
+  reaction_type: string;
+}
+
 interface MessageWithAttachments {
   message: Message;
   handle: Handle | null;
   attachments: Attachment[];
+  reactions?: Reaction[];
 }
 
 interface MessagePDFProps {
@@ -64,6 +75,37 @@ export default function MessagePDF({
     return 'All messages';
   };
 
+  const formatReactions = (reactions?: Reaction[]) => {
+    if (!reactions || reactions.length === 0) return null;
+
+    const reactionEmojis: Record<string, string> = {
+      heart: '❤️',
+      thumbs_up: '👍',
+      thumbs_down: '👎',
+      laugh: '😂',
+      emphasize: '‼️',
+      question: '❓',
+    };
+
+    // Group reactions by type
+    const grouped = reactions.reduce((acc, reaction) => {
+      const emoji = reactionEmojis[reaction.reaction_type] || '👍';
+      if (!acc[emoji]) {
+        acc[emoji] = { count: 0, senders: [] };
+      }
+      acc[emoji].count++;
+      const sender = reaction.is_from_me === 1 ? 'You' : (reaction.sender_id || 'Unknown');
+      acc[emoji].senders.push(sender);
+      return acc;
+    }, {} as Record<string, { count: number; senders: string[] }>);
+
+    return Object.entries(grouped).map(([emoji, data]) => {
+      const sendersText = data.senders.slice(0, 3).join(', ');
+      const moreText = data.senders.length > 3 ? ` +${data.senders.length - 3} more` : '';
+      return `${emoji} ${data.count} (${sendersText}${moreText})`;
+    }).join(' • ');
+  };
+
   // Group messages by date for better organization
   const messagesByDate = messages.reduce((acc, messageData) => {
     const date = formatDateOnly(messageData.message.date);
@@ -92,9 +134,10 @@ export default function MessagePDF({
             <Text style={styles.dateSeparator}>{date}</Text>
             
             {dateMessages.map((messageData) => {
-              const { message, handle, attachments } = messageData;
+              const { message, handle, attachments, reactions } = messageData;
               const isFromMe = message.is_from_me === 1;
               const sender = isFromMe ? 'You' : (handle?.id || 'Unknown');
+              const reactionText = formatReactions(reactions);
               
               return (
                 <View key={message.ROWID} style={styles.messageContainer}>
@@ -126,6 +169,15 @@ export default function MessagePDF({
                             )}
                           </View>
                         ))}
+                      </View>
+                    )}
+
+                    {/* Reactions */}
+                    {reactionText && (
+                      <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: isFromMe ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }}>
+                        <Text style={{ fontSize: 9, color: isFromMe ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.6)' }}>
+                          {reactionText}
+                        </Text>
                       </View>
                     )}
                   </View>

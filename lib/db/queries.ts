@@ -27,7 +27,8 @@ export function getAllConversations(
       MAX(CASE WHEN m.text IS NOT NULL AND m.text != '' THEN m.text ELSE NULL END) as last_message
     FROM chat c
     LEFT JOIN chat_message_join cmj ON c.ROWID = cmj.chat_id
-    LEFT JOIN message m ON cmj.message_id = m.ROWID
+    LEFT JOIN message m ON cmj.message_id = m.ROWID 
+      AND (m.associated_message_type IS NULL OR m.associated_message_type < 2000 OR m.associated_message_type > 3005)
     WHERE c.is_archived = 0
   `;
 
@@ -138,7 +139,9 @@ export function getMessagesForConversation(
     FROM message m
     JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
     LEFT JOIN handle h ON m.handle_id = h.ROWID
-    WHERE cmj.chat_id = ? ${dateFilter}
+    WHERE cmj.chat_id = ? 
+      AND (m.associated_message_type IS NULL OR m.associated_message_type < 2000 OR m.associated_message_type > 3005)
+      ${dateFilter}
     ORDER BY m.date ASC
   `;
 
@@ -166,6 +169,63 @@ export function getMessagesForConversation(
     }
   >;
 
+  // OPTIMIZATION: Fetch ALL reactions for this conversation in one query
+  // Build a map of message GUID -> reactions
+  const reactionsQuery = `
+    SELECT 
+      m.ROWID,
+      m.associated_message_guid,
+      m.associated_message_type,
+      m.handle_id,
+      m.is_from_me,
+      m.date,
+      h.id as sender_id
+    FROM message m
+    JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
+    LEFT JOIN handle h ON m.handle_id = h.ROWID
+    WHERE cmj.chat_id = ?
+      AND m.associated_message_type BETWEEN 2000 AND 2005
+  `;
+
+  const allReactions = db.prepare(reactionsQuery).all(chatId) as Array<{
+    ROWID: number;
+    associated_message_guid: string;
+    associated_message_type: number;
+    handle_id: number | null;
+    is_from_me: number;
+    date: number;
+    sender_id: string | null;
+  }>;
+
+  // Build a map: message GUID -> array of reactions
+  const reactionsMap = new Map<string, Reaction[]>();
+
+  for (const reactionRow of allReactions) {
+    const reaction: Reaction = {
+      ROWID: reactionRow.ROWID,
+      associated_message_type: reactionRow.associated_message_type,
+      handle_id: reactionRow.handle_id,
+      is_from_me: reactionRow.is_from_me,
+      date: reactionRow.date,
+      sender_id: reactionRow.sender_id,
+      reaction_type: getReactionTypeFromCode(
+        reactionRow.associated_message_type
+      ) as any,
+    };
+
+    // The associated_message_guid may have a prefix like "p:0/" or "bp:"
+    // Extract the actual GUID from it
+    const guidMatch =
+      reactionRow.associated_message_guid.match(/([A-F0-9-]{36})/i);
+    if (guidMatch) {
+      const cleanGuid = guidMatch[1];
+      if (!reactionsMap.has(cleanGuid)) {
+        reactionsMap.set(cleanGuid, []);
+      }
+      reactionsMap.get(cleanGuid)!.push(reaction);
+    }
+  }
+
   const messagesWithAttachments = messages.map((msg) => {
     // Get attachments for this message
     const attachmentsQuery = `
@@ -190,10 +250,14 @@ export function getMessagesForConversation(
         } as Handle)
       : null;
 
+    // Get reactions from the pre-built map (instant lookup!)
+    const reactions = reactionsMap.get((msg as Message).guid) || [];
+
     return {
       message: msg as Message,
       handle,
       attachments,
+      reactions,
     };
   });
 
@@ -257,22 +321,15 @@ export function getAttachmentPath(attachmentId: number): string | null {
   return result?.filename || null;
 }
 
-export function getReactionsForMessage(messageId: number): Reaction[] {
-  const db = getDatabase();
-
-  // Note: Reactions are stored in the message_summary_info blob
-  // This is a simplified implementation - actual reaction parsing would need
-  // to decode the binary data structure
-  const query = `
-    SELECT 
-      m.ROWID as message_id,
-      m.handle_id,
-      m.date,
-      'heart' as reaction_type
-    FROM message m
-    WHERE m.ROWID = ? AND m.message_summary_info IS NOT NULL
-  `;
-
-  const result = db.prepare(query).get(messageId) as Reaction | undefined;
-  return result ? [result] : [];
+// Helper function to map associated_message_type to reaction type
+function getReactionTypeFromCode(code: number): string {
+  const reactionMap: Record<number, string> = {
+    2000: "heart",
+    2001: "thumbs_up",
+    2002: "thumbs_down",
+    2003: "laugh",
+    2004: "emphasize",
+    2005: "question",
+  };
+  return reactionMap[code] || "heart";
 }

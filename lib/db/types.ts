@@ -168,9 +168,20 @@ export interface MessageWithAttachments {
   reactions?: Reaction[];
 }
 
+export type ReactionType =
+  | "heart"
+  | "thumbs_up"
+  | "thumbs_down"
+  | "laugh"
+  | "emphasize"
+  | "question";
+
 export interface Reaction {
-  message_id: number;
-  handle_id: number;
-  reaction_type: string;
+  ROWID: number;
+  associated_message_type: number;
+  handle_id: number | null;
+  is_from_me: number;
   date: number;
+  sender_id: string | null;
+  reaction_type: ReactionType;
 }
