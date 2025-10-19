@@ -3,6 +3,7 @@
 import { format } from 'date-fns';
 import ImageAttachment from './ImageAttachment';
 import VideoAttachment from './VideoAttachment';
+import { imessageToDate } from '@/lib/utils/timestamp';
 
 interface Message {
   ROWID: number;
@@ -31,6 +32,8 @@ interface MessageBubbleProps {
   attachments: Attachment[];
   dbPath: string;
   attachmentsPath: string;
+  showTimestamp?: boolean;
+  showDateSeparator?: boolean;
 }
 
 // Helper function to detect and render URLs as clickable links
@@ -62,21 +65,25 @@ export default function MessageBubble({
   handle, 
   attachments, 
   dbPath, 
-  attachmentsPath 
+  attachmentsPath,
+  showTimestamp = false,
+  showDateSeparator = false
 }: MessageBubbleProps) {
   const isFromMe = message.is_from_me === 1;
   const sender = isFromMe ? 'You' : (handle?.id || 'Unknown');
-  const timestamp = new Date(message.date * 1000);
+  const timestamp = imessageToDate(message.date);
   const isValidDate = !isNaN(timestamp.getTime());
 
   return (
     <div className={`flex ${isFromMe ? 'justify-end' : 'justify-start'} mb-4`}>
       <div className={`max-w-xs lg:max-w-md ${isFromMe ? 'order-2' : 'order-1'}`}>
-        {/* Sender and timestamp */}
-        <div className={`text-xs text-gray-500 mb-1 ${isFromMe ? 'text-right' : 'text-left'}`}>
-          <span className="font-medium">{sender}</span>
-          {isValidDate && <span className="ml-2">{format(timestamp, 'h:mm a')}</span>}
-        </div>
+        {/* Sender and timestamp - only show when showTimestamp is true */}
+        {showTimestamp && (
+          <div className={`text-xs text-gray-500 mb-1 ${isFromMe ? 'text-right' : 'text-left'}`}>
+            <span className="font-medium">{sender}</span>
+            {isValidDate && <span className="ml-2">{format(timestamp, 'h:mm a')}</span>}
+          </div>
+        )}
         
         {/* Message bubble */}
         <div
@@ -134,13 +141,6 @@ export default function MessageBubble({
             </div>
           )}
         </div>
-        
-        {/* Date (shown on hover or for first message of day) */}
-        {isValidDate && (
-          <div className={`text-xs text-gray-400 mt-1 ${isFromMe ? 'text-right' : 'text-left'}`}>
-            {format(timestamp, 'MMM d, yyyy')}
-          </div>
-        )}
       </div>
     </div>
   );

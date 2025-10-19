@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import MessageBubble from '@/components/MessageBubble';
 import DateRangePicker from '@/components/DateRangePicker';
 import InfiniteScroll from 'react-infinite-scroll-component';
+import { imessageToDate, isMoreThan5MinutesApart, isDifferentDay } from '@/lib/utils/timestamp';
 
 interface Message {
   ROWID: number;
@@ -278,17 +279,48 @@ export default function ConversationPage() {
               }
               scrollableTarget="scrollableDiv"
             >
-              <div className="space-y-4">
-                {messages.map((messageData) => (
-                  <MessageBubble
-                    key={messageData.message.ROWID}
-                    message={messageData.message}
-                    handle={messageData.handle}
-                    attachments={messageData.attachments}
-                    dbPath={dbPath}
-                    attachmentsPath={attachmentsPath}
-                  />
-                ))}
+              <div className="space-y-1">
+                {messages.map((messageData, index) => {
+                  const prevMessage = index > 0 ? messages[index - 1].message : null;
+                  const currentMessage = messageData.message;
+                  
+                  // Determine if we should show timestamp (first message or 5+ minutes apart)
+                  const showTimestamp = 
+                    index === 0 || 
+                    (prevMessage && isMoreThan5MinutesApart(prevMessage.date, currentMessage.date));
+                  
+                  // Determine if we should show date separator (different day)
+                  const showDateSeparator = 
+                    index === 0 || 
+                    (prevMessage && isDifferentDay(prevMessage.date, currentMessage.date));
+                  
+                  const currentDate = imessageToDate(currentMessage.date);
+                  
+                  return (
+                    <div key={messageData.message.ROWID}>
+                      {/* Date separator */}
+                      {showDateSeparator && (
+                        <div className="flex items-center justify-center my-6">
+                          <div className="bg-gray-200 rounded-full px-4 py-1">
+                            <span className="text-xs font-medium text-gray-600">
+                              {format(currentDate, 'EEEE, MMMM d, yyyy')}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Message bubble */}
+                      <MessageBubble
+                        message={messageData.message}
+                        handle={messageData.handle}
+                        attachments={messageData.attachments}
+                        dbPath={dbPath}
+                        attachmentsPath={attachmentsPath}
+                        showTimestamp={showTimestamp}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </InfiniteScroll>
           )}

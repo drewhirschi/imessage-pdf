@@ -19,7 +19,14 @@ export default function FileExplorer({
   const [error, setError] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
-  // Load directory contents when path changes
+  // Reset selected path when dialog opens or mode changes
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedPath(null);
+    }
+  }, [isOpen, mode]);
+
+  // Load directory contents when path changes or dialog opens
   useEffect(() => {
     if (isOpen) {
       loadDirectory(currentPath);

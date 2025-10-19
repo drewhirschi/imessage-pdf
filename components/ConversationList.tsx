@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { format } from 'date-fns';
 import { Search, X } from 'lucide-react';
 import InfiniteScroll from 'react-infinite-scroll-component';
+import { imessageToDate, formatRelativeTime } from '@/lib/utils/timestamp';
 
 interface Conversation {
   chat_id: number;
@@ -125,12 +125,8 @@ export default function ConversationList({ dbPath, attachmentsPath }: Conversati
 
   const formatLastMessageDate = (timestamp: number | null) => {
     if (!timestamp) return '';
-    try {
-      return format(new Date(timestamp * 1000), 'MMM d, yyyy h:mm a');
-    } catch (err) {
-      console.error('Error formatting last message date:', timestamp,err);
-      return '';
-    }
+    const date = imessageToDate(timestamp);
+    return formatRelativeTime(date);
   };
 
   if (loading) {

@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, Text, View } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { styles } from './styles';
+import { imessageToDate } from '../utils/timestamp';
 
 interface Message {
   ROWID: number;
@@ -45,20 +46,20 @@ export default function MessagePDF({
   endDate 
 }: MessagePDFProps) {
   const formatDate = (timestamp: number) => {
-    return format(new Date(timestamp * 1000), 'MMM d, yyyy h:mm a');
+    return format(imessageToDate(timestamp), 'MMM d, yyyy h:mm a');
   };
 
   const formatDateOnly = (timestamp: number) => {
-    return format(new Date(timestamp * 1000), 'EEEE, MMMM d, yyyy');
+    return format(imessageToDate(timestamp), 'EEEE, MMMM d, yyyy');
   };
 
   const getDateRangeText = () => {
     if (startDate && endDate) {
-      return `${format(new Date(startDate * 1000), 'MMM d, yyyy')} - ${format(new Date(endDate * 1000), 'MMM d, yyyy')}`;
+      return `${format(imessageToDate(startDate), 'MMM d, yyyy')} - ${format(imessageToDate(endDate), 'MMM d, yyyy')}`;
     } else if (startDate) {
-      return `From ${format(new Date(startDate * 1000), 'MMM d, yyyy')}`;
+      return `From ${format(imessageToDate(startDate), 'MMM d, yyyy')}`;
     } else if (endDate) {
-      return `Until ${format(new Date(endDate * 1000), 'MMM d, yyyy')}`;
+      return `Until ${format(imessageToDate(endDate), 'MMM d, yyyy')}`;
     }
     return 'All messages';
   };
