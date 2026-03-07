@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import MessageBubble from '@/components/MessageBubble';
 import DateRangePicker from '@/components/DateRangePicker';
 import InfiniteScroll from 'react-infinite-scroll-component';
-import { imessageToDate, isMoreThan5MinutesApart, isDifferentDay } from '@/lib/utils/timestamp';
+import { imessageToDate, isMoreThan5MinutesApart, isDifferentDay, unixToImessageTimestamp } from '@/lib/utils/timestamp';
 
 interface Message {
   ROWID: number;
@@ -56,15 +56,32 @@ interface ConversationDetails {
 export default function ConversationPage() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const chatId = params.id as string;
   const dbPath = searchParams.get('dbPath') || '';
   const attachmentsPath = searchParams.get('attachmentsPath') || '';
 
+  // Initialize dates from URL parameters
+  const getInitialDateFromURL = (paramName: string): Date | null => {
+    const dateString = searchParams.get(paramName);
+    if (!dateString) return null;
+    
+    try {
+      // Parse YYYY-MM-DD format from URL
+      const date = new Date(dateString + 'T00:00:00');
+      // Validate the date
+      if (isNaN(date.getTime())) return null;
+      return date;
+    } catch {
+      return null;
+    }
+  };
+
   const [messages, setMessages] = useState<MessageWithAttachments[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [startDate, setStartDate] = useState<Date | null>(getInitialDateFromURL('startDate'));
+  const [endDate, setEndDate] = useState<Date | null>(getInitialDateFromURL('endDate'));
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -86,10 +103,19 @@ export default function ConversationPage() {
       url.searchParams.set('limit', PAGE_SIZE.toString());
       url.searchParams.set('getDetails', pageNum === 1 ? 'true' : 'false');
       if (startDate) {
-        url.searchParams.set('startDate', Math.floor(startDate.getTime() / 1000).toString());
+        // Convert JavaScript Date to Unix timestamp (seconds), then to iMessage timestamp (nanoseconds since 2001)
+        const unixTimestamp = Math.floor(startDate.getTime() / 1000);
+        const imessageTimestamp = unixToImessageTimestamp(unixTimestamp);
+        url.searchParams.set('startDate', imessageTimestamp.toString());
       }
       if (endDate) {
-        url.searchParams.set('endDate', Math.floor(endDate.getTime() / 1000).toString());
+        // Convert JavaScript Date to Unix timestamp (seconds), then to iMessage timestamp (nanoseconds since 2001)
+        // For end date, we want to include the entire day, so set to end of day
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        const unixTimestamp = Math.floor(endOfDay.getTime() / 1000);
+        const imessageTimestamp = unixToImessageTimestamp(unixTimestamp);
+        url.searchParams.set('endDate', imessageTimestamp.toString());
       }
       
       const response = await fetch(url.toString());
@@ -141,11 +167,49 @@ export default function ConversationPage() {
   const handleDateRangeChange = (start: Date | null, end: Date | null) => {
     setStartDate(start);
     setEndDate(end);
+    
+    // Update URL with date filters
+    const params = new URLSearchParams(window.location.search);
+    
+    if (start) {
+      // Format as YYYY-MM-DD
+      const startString = format(start, 'yyyy-MM-dd');
+      params.set('startDate', startString);
+    } else {
+      params.delete('startDate');
+    }
+    
+    if (end) {
+      // Format as YYYY-MM-DD
+      const endString = format(end, 'yyyy-MM-dd');
+      params.set('endDate', endString);
+    } else {
+      params.delete('endDate');
+    }
+    
+    // Replace URL without adding to history
+    router.replace(`${window.location.pathname}?${params.toString()}`, { scroll: false });
   };
 
   const generatePDF = async () => {
     try {
       setGeneratingPDF(true);
+      
+      // Convert dates to iMessage timestamps for the API
+      let startImessageTimestamp = null;
+      let endImessageTimestamp = null;
+      
+      if (startDate) {
+        const unixTimestamp = Math.floor(startDate.getTime() / 1000);
+        startImessageTimestamp = unixToImessageTimestamp(unixTimestamp);
+      }
+      
+      if (endDate) {
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        const unixTimestamp = Math.floor(endOfDay.getTime() / 1000);
+        endImessageTimestamp = unixToImessageTimestamp(unixTimestamp);
+      }
       
       const response = await fetch('/api/generate-pdf', {
         method: 'POST',
@@ -156,8 +220,8 @@ export default function ConversationPage() {
           chatId: parseInt(chatId),
           dbPath,
           attachmentsPath,
-          startDate: startDate ? Math.floor(startDate.getTime() / 1000) : null,
-          endDate: endDate ? Math.floor(endDate.getTime() / 1000) : null,
+          startDate: startImessageTimestamp,
+          endDate: endImessageTimestamp,
           title: `iMessage Conversation - ${chatId}`,
         }),
       });
@@ -246,7 +310,11 @@ export default function ConversationPage() {
 
       {/* Date Range Picker */}
       <div className="p-4 bg-white border-b">
-        <DateRangePicker onDateRangeChange={handleDateRangeChange} />
+        <DateRangePicker 
+          onDateRangeChange={handleDateRangeChange}
+          initialStartDate={startDate}
+          initialEndDate={endDate}
+        />
       </div>
 
       {/* Messages */}

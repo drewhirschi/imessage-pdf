@@ -1,4 +1,5 @@
 import { StyleSheet } from "@react-pdf/renderer";
+import { FONT_FAMILIES } from "./fonts";
 
 export const styles = StyleSheet.create({
   page: {
@@ -7,6 +8,7 @@ export const styles = StyleSheet.create({
     padding: 30,
     fontSize: 12,
     lineHeight: 1.4,
+    fontFamily: FONT_FAMILIES.text,
   },
   header: {
     marginBottom: 20,
@@ -16,7 +18,8 @@ export const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: 600,
+    fontFamily: FONT_FAMILIES.display,
     color: "#1F2937",
     marginBottom: 8,
   },
@@ -24,6 +27,7 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     marginBottom: 4,
+    fontFamily: FONT_FAMILIES.text,
   },
   messageContainer: {
     marginBottom: 15,
@@ -49,18 +53,21 @@ export const styles = StyleSheet.create({
   messageText: {
     fontSize: 12,
     lineHeight: 1.4,
+    fontFamily: FONT_FAMILIES.text,
   },
   timestamp: {
     fontSize: 10,
     color: "#6B7280",
     marginTop: 4,
     textAlign: "right",
+    fontFamily: FONT_FAMILIES.text,
   },
   receivedTimestamp: {
     fontSize: 10,
     color: "#6B7280",
     marginTop: 4,
     textAlign: "left",
+    fontFamily: FONT_FAMILIES.text,
   },
   attachment: {
     marginTop: 8,
@@ -68,6 +75,13 @@ export const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.1)",
     borderRadius: 8,
     fontSize: 10,
+  },
+  attachmentImage: {
+    maxWidth: 300,
+    maxHeight: 400,
+    objectFit: "contain",
+    marginTop: 8,
+    borderRadius: 8,
   },
   imagePlaceholder: {
     width: 200,
@@ -82,12 +96,14 @@ export const styles = StyleSheet.create({
   imageText: {
     fontSize: 10,
     color: "#6B7280",
+    fontFamily: FONT_FAMILIES.text,
   },
   reaction: {
     fontSize: 10,
     color: "#6B7280",
     marginTop: 4,
     fontStyle: "italic",
+    fontFamily: FONT_FAMILIES.text,
   },
   pageNumber: {
     position: "absolute",
@@ -97,12 +113,14 @@ export const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 10,
     color: "#6B7280",
+    fontFamily: FONT_FAMILIES.text,
   },
   dateSeparator: {
     textAlign: "center",
     fontSize: 10,
     color: "#6B7280",
     marginVertical: 10,
-    fontStyle: "italic",
+    fontWeight: 600,
+    fontFamily: FONT_FAMILIES.text,
   },
 });

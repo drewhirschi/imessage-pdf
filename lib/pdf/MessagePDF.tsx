@@ -1,8 +1,9 @@
 import React from 'react';
-import { Document, Page, Text, View } from '@react-pdf/renderer';
+import { Document, Page, Text, View, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { styles } from './styles';
 import { imessageToDate } from '../utils/timestamp';
+import './fonts'; // Import to register fonts
 
 interface Message {
   ROWID: number;
@@ -22,6 +23,7 @@ interface Attachment {
   ROWID: number;
   filename: string | null;
   mime_type: string | null;
+  imageData?: string; // Base64 encoded image data
 }
 
 interface Reaction {
@@ -155,17 +157,27 @@ export default function MessagePDF({
                     {attachments.length > 0 && (
                       <View style={{ marginTop: 8 }}>
                         {attachments.map((attachment) => (
-                          <View key={attachment.ROWID} style={styles.attachment}>
-                            {attachment.mime_type?.startsWith('image/') ? (
+                          <View key={attachment.ROWID}>
+                            {attachment.imageData ? (
+                              // Render actual image if we have the data
+                              <Image 
+                                src={attachment.imageData} 
+                                style={styles.attachmentImage}
+                              />
+                            ) : attachment.mime_type?.startsWith('image/') ? (
+                              // Placeholder for images without data
                               <View style={styles.imagePlaceholder}>
                                 <Text style={styles.imageText}>
                                   📷 {attachment.filename || 'Image'}
                                 </Text>
                               </View>
                             ) : (
-                              <Text style={styles.imageText}>
-                                📎 {attachment.filename || 'Attachment'}
-                              </Text>
+                              // Non-image attachments
+                              <View style={styles.attachment}>
+                                <Text style={styles.imageText}>
+                                  📎 {attachment.filename || 'Attachment'}
+                                </Text>
+                              </View>
                             )}
                           </View>
                         ))}

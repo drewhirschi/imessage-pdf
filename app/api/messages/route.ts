@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     // Connect to the database
     connectToDatabase(dbPath);
 
-    // Parse date parameters
+    // Parse date parameters - these are already in iMessage timestamp format (nanoseconds since 2001-01-01)
     const startTimestamp = startDate ? parseInt(startDate) : undefined;
     const endTimestamp = endDate ? parseInt(endDate) : undefined;
 

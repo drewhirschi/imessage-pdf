@@ -4,9 +4,107 @@ import {
   getMessagesForConversation,
   getConversationById,
 } from "@/lib/db/queries";
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { renderToStream } from "@react-pdf/renderer";
+import MessagePDF from "@/lib/pdf/MessagePDF";
 import fs from "fs";
 import path from "path";
+import sharp from "sharp";
+import convert from "heic-convert";
+
+interface ProcessedAttachment {
+  ROWID: number;
+  filename: string | null;
+  mime_type: string | null;
+  imageData?: string;
+}
+
+async function processAttachment(
+  attachment: any,
+  attachmentsPath: string
+): Promise<ProcessedAttachment> {
+  const processed: ProcessedAttachment = {
+    ROWID: attachment.ROWID,
+    filename: attachment.filename,
+    mime_type: attachment.mime_type,
+  };
+
+  if (!attachment.filename || !attachmentsPath) {
+    return processed;
+  }
+
+  try {
+    // Strip the ~/Library/Messages/ prefix from filename if present
+    let relativeFilename = attachment.filename;
+    if (attachment.filename.startsWith("~/Library/Messages/")) {
+      relativeFilename = attachment.filename.substring(
+        "~/Library/Messages/".length
+      );
+    } else if (attachment.filename.startsWith("/Library/Messages/")) {
+      relativeFilename = attachment.filename.substring(
+        "/Library/Messages/".length
+      );
+    }
+
+    const attachmentPath = path.join(attachmentsPath, relativeFilename);
+
+    if (!fs.existsSync(attachmentPath)) {
+      console.warn(`Attachment not found: ${attachmentPath}`);
+      return processed;
+    }
+
+    const ext = path.extname(attachment.filename).toLowerCase();
+
+    // Only process image attachments
+    if (
+      ![
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".webp",
+        ".heic",
+        ".heif",
+        ".pluginpayloadattachment",
+      ].includes(ext)
+    ) {
+      return processed;
+    }
+
+    let imageBuffer: Buffer;
+
+    // Convert HEIC/HEIF to JPEG
+    if (ext === ".heic" || ext === ".heif") {
+      const inputBuffer = fs.readFileSync(attachmentPath);
+      const outputBuffer = await convert({
+        buffer: inputBuffer as any,
+        format: "JPEG",
+        quality: 0.9,
+      });
+      imageBuffer = Buffer.from(outputBuffer);
+    } else {
+      imageBuffer = fs.readFileSync(attachmentPath);
+    }
+
+    // Resize image to reasonable dimensions for PDF
+    // Max width 800px, max height 1000px, maintain aspect ratio
+    const resizedBuffer = await sharp(imageBuffer)
+      .resize(800, 1000, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+
+    // Convert to base64 data URL
+    const base64 = resizedBuffer.toString("base64");
+    processed.imageData = `data:image/jpeg;base64,${base64}`;
+    processed.mime_type = "image/jpeg";
+  } catch (error) {
+    console.error(`Error processing attachment ${attachment.filename}:`, error);
+  }
+
+  return processed;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,180 +145,68 @@ export async function POST(request: NextRequest) {
     );
     const messages = result.messages;
 
-    // Create PDF
-    const pdfDoc = await PDFDocument.create();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    // Process all attachments
+    console.log("Processing attachments...");
+    const processedMessages = await Promise.all(
+      messages.map(async (messageData) => {
+        const processedAttachments = await Promise.all(
+          messageData.attachments.map((attachment) =>
+            processAttachment(attachment, attachmentsPath)
+          )
+        );
 
-    const pageWidth = 612; // 8.5 inches
-    const pageHeight = 792; // 11 inches
-    const margin = 50;
-    const contentWidth = pageWidth - margin * 2;
+        return {
+          ...messageData,
+          attachments: processedAttachments,
+        };
+      })
+    );
 
-    let currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
-    let currentY = pageHeight - margin - 50;
+    // Get participants list
+    const participants = [
+      ...new Set(
+        messages
+          .map((m) => (m.message.is_from_me ? "You" : m.handle?.id))
+          .filter(Boolean)
+      ),
+    ] as string[];
 
-    // Add title
-    currentPage.drawText(title, {
-      x: margin,
-      y: currentY,
-      size: 18,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
-    currentY -= 30;
+    console.log("Generating PDF...");
 
-    // Add conversation info
-    const conversationInfo = `Participants: ${conversation.chat_identifier}`;
-    currentPage.drawText(conversationInfo, {
-      x: margin,
-      y: currentY,
-      size: 12,
-      font: font,
-      color: rgb(0.3, 0.3, 0.3),
-    });
-    currentY -= 20;
+    // Create PDF using React PDF renderer with streaming
+    const stream = await renderToStream(
+      MessagePDF({
+        title,
+        participants,
+        messages: processedMessages,
+        startDate: startDate ? parseInt(startDate) : undefined,
+        endDate: endDate ? parseInt(endDate) : undefined,
+      })
+    );
 
-    // Add date range if specified
-    if (startDate || endDate) {
-      const start = startDate
-        ? new Date(parseInt(startDate) * 1000).toLocaleDateString()
-        : "Beginning";
-      const end = endDate
-        ? new Date(parseInt(endDate) * 1000).toLocaleDateString()
-        : "Present";
-      const dateRange = `Date Range: ${start} - ${end}`;
-      currentPage.drawText(dateRange, {
-        x: margin,
-        y: currentY,
-        size: 12,
-        font: font,
-        color: rgb(0.3, 0.3, 0.3),
-      });
-      currentY -= 30;
-    }
+    console.log("PDF stream created, sending to client...");
 
-    // Add messages
-    for (const messageData of messages) {
-      const { message, handle, attachments } = messageData;
-
-      // Check if we need a new page
-      if (currentY < 100) {
-        currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
-        currentY = pageHeight - margin;
-      }
-
-      // Format timestamp
-      const timestamp = new Date(message.date * 1000).toLocaleString();
-      const sender = message.is_from_me ? "You" : handle?.id || "Unknown";
-
-      // Draw sender and timestamp
-      currentPage.drawText(`${sender} - ${timestamp}`, {
-        x: margin,
-        y: currentY,
-        size: 10,
-        font: font,
-        color: rgb(0.5, 0.5, 0.5),
-      });
-      currentY -= 15;
-
-      // Draw message text if present
-      if (message.text && message.text.trim()) {
-        const text = message.text;
-        const maxWidth = contentWidth - 20;
-        const bubbleWidth = Math.min(maxWidth, text.length * 6 + 20);
-        const bubbleX = message.is_from_me
-          ? pageWidth - margin - bubbleWidth
-          : margin;
-
-        // Draw message bubble background
-        currentPage.drawRectangle({
-          x: bubbleX,
-          y: currentY - 20,
-          width: bubbleWidth,
-          height: 25,
-          borderColor: message.is_from_me ? rgb(0, 0.5, 1) : rgb(0.8, 0.8, 0.8),
-          borderWidth: 1,
-          color: message.is_from_me ? rgb(0, 0.5, 1) : rgb(0.9, 0.9, 0.9),
+    // Convert Node.js stream to Web Stream for NextResponse
+    const webStream = new ReadableStream({
+      start(controller) {
+        stream.on("data", (chunk: Buffer) => {
+          controller.enqueue(chunk);
         });
-
-        // Draw message text
-        currentPage.drawText(text, {
-          x: bubbleX + 10,
-          y: currentY - 10,
-          size: 11,
-          font: font,
-          color: message.is_from_me ? rgb(1, 1, 1) : rgb(0, 0, 0),
-          maxWidth: bubbleWidth - 20,
+        
+        stream.on("end", () => {
+          console.log("PDF stream completed");
+          controller.close();
         });
+        
+        stream.on("error", (error: Error) => {
+          console.error("Stream error:", error);
+          controller.error(error);
+        });
+      },
+    });
 
-        currentY -= 35;
-      }
-
-      // Handle attachments
-      for (const attachment of attachments) {
-        if (attachment.filename && attachmentsPath) {
-          // Strip the ~/Library/Messages/ prefix from filename if present
-          let relativeFilename = attachment.filename;
-          if (attachment.filename.startsWith("~/Library/Messages/")) {
-            relativeFilename = attachment.filename.substring(
-              "~/Library/Messages/".length
-            );
-          } else if (attachment.filename.startsWith("/Library/Messages/")) {
-            relativeFilename = attachment.filename.substring(
-              "/Library/Messages/".length
-            );
-          }
-
-          const attachmentPath = path.join(attachmentsPath, relativeFilename);
-
-          if (fs.existsSync(attachmentPath)) {
-            const ext = path.extname(attachment.filename).toLowerCase();
-
-            if (
-              [
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".gif",
-                ".webp",
-                ".heic",
-                ".heif",
-                ".pluginpayloadattachment",
-              ].includes(ext)
-            ) {
-              // For images, we'll just note their presence in the PDF
-              // In a full implementation, you'd embed the actual image
-              currentPage.drawText(`[Image: ${attachment.filename}]`, {
-                x: margin,
-                y: currentY,
-                size: 10,
-                font: font,
-                color: rgb(0.3, 0.3, 0.3),
-              });
-              currentY -= 15;
-            } else {
-              currentPage.drawText(`[Attachment: ${attachment.filename}]`, {
-                x: margin,
-                y: currentY,
-                size: 10,
-                font: font,
-                color: rgb(0.3, 0.3, 0.3),
-              });
-              currentY -= 15;
-            }
-          }
-        }
-      }
-
-      currentY -= 10; // Space between messages
-    }
-
-    // Generate PDF bytes
-    const pdfBytes = await pdfDoc.save();
-
-    // Return PDF as response
-    return new NextResponse(new Uint8Array(pdfBytes), {
+    // Return streamed PDF response
+    return new NextResponse(webStream, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="imessage-${chatId}-${Date.now()}.pdf"`,
@@ -229,7 +215,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error generating PDF:", error);
     return NextResponse.json(
-      { error: "Failed to generate PDF" },
+      { error: "Failed to generate PDF", details: String(error) },
       { status: 500 }
     );
   }

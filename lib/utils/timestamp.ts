@@ -98,3 +98,12 @@ export function isDifferentDay(
     prevDate.getDate() !== currentDate.getDate()
   );
 }
+
+/**
+ * Convert Unix timestamp (seconds since 1970) to iMessage timestamp (nanoseconds since 2001-01-01)
+ */
+export function unixToImessageTimestamp(unixTimestamp: number): number {
+  const APPLE_EPOCH = 978307200; // 2001-01-01 00:00:00 UTC in Unix time
+  const secondsSinceAppleEpoch = unixTimestamp - APPLE_EPOCH;
+  return secondsSinceAppleEpoch * 1000000000; // Convert to nanoseconds
+}
