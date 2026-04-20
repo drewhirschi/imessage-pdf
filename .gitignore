@@ -42,3 +42,6 @@ yarn-error.log*
 next-env.d.ts
 .gstack/
 .claude/
+
+# Local reference screenshots (copyright-murky, keep off repo)
+/docs/reference/screenshots/

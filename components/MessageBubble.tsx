@@ -40,11 +40,14 @@ interface MessageBubbleProps {
   reactions?: Reaction[];
   dbPath: string;
   attachmentsPath: string;
+  /** Show the centered time separator above this bubble (iMessage shows this on 5-min gaps). */
   showTimestamp?: boolean;
-  showDateSeparator?: boolean;
+  /** Show the sender name above this bubble (group chats, first bubble of a sender's run). */
+  showSenderLabel?: boolean;
+  /** This is the last message in the sender's run — render the "tail" corner. */
+  isLastOfRun?: boolean;
 }
 
-// Helper function to detect and render URLs as clickable links
 function renderTextWithLinks(text: string, isFromMe: boolean) {
   const urlPattern = /(https?:\/\/[^\s]+)/g;
   const parts = text.split(urlPattern);
@@ -75,124 +78,139 @@ export default function MessageBubble({
   dbPath,
   attachmentsPath,
   showTimestamp = false,
+  showSenderLabel = false,
+  isLastOfRun = true,
 }: MessageBubbleProps) {
   const [showReactionModal, setShowReactionModal] = useState(false);
   const isFromMe = message.is_from_me === 1;
   const contacts = useContactsOptional();
   const rawSender = handle?.id ?? null;
   const resolved = rawSender ? contacts?.resolve(rawSender) ?? null : null;
-  const sender = isFromMe ? 'You' : resolved ?? rawSender ?? 'Unknown';
+  const senderName = resolved ?? rawSender ?? 'Unknown';
   const timestamp = imessageToDate(message.date);
   const isValidDate = !isNaN(timestamp.getTime());
-  // iMessage inserts U+FFFC (object replacement char) where attachments sit in text
   const cleanText = message.text?.replace(/\uFFFC/g, '').trim() || null;
+
+  // iOS 14 iMessage colors + radii
+  const bubbleColorClass = isFromMe
+    ? 'bg-[#007AFF] text-white'
+    : 'bg-[#E9E9EB] text-black';
+  const tailCorner = isLastOfRun
+    ? isFromMe
+      ? 'rounded-br-[4px]'
+      : 'rounded-bl-[4px]'
+    : '';
 
   return (
     <>
-      <div className={`flex ${isFromMe ? 'justify-end' : 'justify-start'} mb-4`}>
-        <div className={`max-w-xs lg:max-w-md ${isFromMe ? 'order-2' : 'order-1'}`}>
-          {showTimestamp && (
-            <div className={`text-xs text-gray-500 mb-1 flex items-center gap-1 ${isFromMe ? 'justify-end' : 'justify-start'}`}>
-              <span className="font-medium">{sender}</span>
-              {!isFromMe && rawSender && !resolved && contacts?.contactsPath && (
-                <InlineNameEditor handleId={rawSender} />
-              )}
-              {isValidDate && <span className="ml-1">{format(timestamp, 'h:mm a')}</span>}
-            </div>
+      {/* Centered time separator on 5-min gaps */}
+      {showTimestamp && isValidDate && (
+        <div className="text-center text-[11px] text-[#8E8E93] my-3">
+          {format(timestamp, 'h:mm a')}
+        </div>
+      )}
+
+      {/* Sender name for group chats, first bubble of sender's run */}
+      {showSenderLabel && !isFromMe && (
+        <div className="px-3 mb-0.5 flex items-center gap-1">
+          <span className="text-[12px] text-[#8E8E93]">{senderName}</span>
+          {rawSender && !resolved && contacts?.contactsPath && (
+            <InlineNameEditor handleId={rawSender} />
           )}
+        </div>
+      )}
 
-          <div className="relative">
-            <div
-              className={`rounded-2xl px-4 py-2 ${
-                isFromMe
-                  ? 'bg-blue-500 text-white rounded-br-md'
-                  : 'bg-gray-200 text-gray-900 rounded-bl-md'
-              }`}
-            >
-              {cleanText && (
-                <p className="text-sm whitespace-pre-wrap break-words">
-                  {renderTextWithLinks(cleanText, isFromMe)}
-                </p>
-              )}
+      <div className={`flex ${isFromMe ? 'justify-end' : 'justify-start'} ${isLastOfRun ? 'mb-2' : 'mb-0.5'} ${reactions.length > 0 ? 'mt-5' : ''}`}>
+        <div className={`max-w-[75%] ${isFromMe ? 'order-2' : 'order-1'} relative`}>
+          <div
+            className={`rounded-[18px] ${tailCorner} px-3 py-[6px] ${bubbleColorClass} text-[15px] leading-[20px]`}
+            style={{
+              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif',
+            }}
+          >
+            {cleanText && (
+              <p className="whitespace-pre-wrap break-words">
+                {renderTextWithLinks(cleanText, isFromMe)}
+              </p>
+            )}
 
-              {attachments.length > 0 && (
-                <div className="mt-2 space-y-2">
-                  {attachments.map((attachment) => {
-                    const mime = attachment.mime_type ?? '';
-                    const filename = attachment.filename ?? '';
-                    const isLocation =
-                      mime === 'text/x-vlocation' ||
-                      /\.loc\.vcf$/i.test(filename);
-                    const isVCard =
-                      !isLocation &&
-                      (mime === 'text/vcard' ||
-                        mime === 'text/x-vcard' ||
-                        /\.vcf$/i.test(filename));
-                    const isImage =
-                      !isVCard &&
-                      !isLocation &&
-                      (mime.startsWith('image/') ||
-                        /\.(jpg|jpeg|png|gif|webp|heic|heif|pluginPayloadAttachment)$/i.test(filename));
-                    const isVideo =
-                      !isVCard &&
-                      !isLocation &&
-                      (mime.startsWith('video/') ||
-                        /\.(mov|mp4|avi|webm|m4v|mkv)$/i.test(filename));
+            {attachments.length > 0 && (
+              <div className={cleanText ? 'mt-1.5 space-y-1.5' : 'space-y-1.5'}>
+                {attachments.map((attachment) => {
+                  const mime = attachment.mime_type ?? '';
+                  const filename = attachment.filename ?? '';
+                  const isLocation =
+                    mime === 'text/x-vlocation' ||
+                    /\.loc\.vcf$/i.test(filename);
+                  const isVCard =
+                    !isLocation &&
+                    (mime === 'text/vcard' ||
+                      mime === 'text/x-vcard' ||
+                      /\.vcf$/i.test(filename));
+                  const isImage =
+                    !isVCard &&
+                    !isLocation &&
+                    (mime.startsWith('image/') ||
+                      /\.(jpg|jpeg|png|gif|webp|heic|heif|pluginPayloadAttachment)$/i.test(filename));
+                  const isVideo =
+                    !isVCard &&
+                    !isLocation &&
+                    (mime.startsWith('video/') ||
+                      /\.(mov|mp4|avi|webm|m4v|mkv)$/i.test(filename));
 
-                    return (
-                      <div key={attachment.ROWID}>
-                        {isLocation ? (
-                          <LocationAttachment
-                            attachmentId={attachment.ROWID}
-                            filename={attachment.filename}
-                            dbPath={dbPath}
-                            attachmentsPath={attachmentsPath}
-                            isFromMe={isFromMe}
-                          />
-                        ) : isVCard ? (
-                          <VCardAttachment
-                            attachmentId={attachment.ROWID}
-                            filename={attachment.filename}
-                            dbPath={dbPath}
-                            attachmentsPath={attachmentsPath}
-                            isFromMe={isFromMe}
-                          />
-                        ) : isImage ? (
-                          <ImageAttachment
-                            attachmentId={attachment.ROWID}
-                            filename={attachment.filename}
-                            dbPath={dbPath}
-                            attachmentsPath={attachmentsPath}
-                          />
-                        ) : isVideo ? (
-                          <VideoAttachment
-                            attachmentId={attachment.ROWID}
-                            filename={attachment.filename}
-                            dbPath={dbPath}
-                            attachmentsPath={attachmentsPath}
-                          />
-                        ) : (
-                          <div className="bg-black bg-opacity-10 rounded-lg p-2">
-                            <p className="text-xs">
-                              📎 {attachment.filename || 'Unknown file'}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {reactions.length > 0 && (
-              <ReactionIndicator
-                reactions={reactions}
-                isFromMe={isFromMe}
-                onClick={() => setShowReactionModal(true)}
-              />
+                  return (
+                    <div key={attachment.ROWID}>
+                      {isLocation ? (
+                        <LocationAttachment
+                          attachmentId={attachment.ROWID}
+                          filename={attachment.filename}
+                          dbPath={dbPath}
+                          attachmentsPath={attachmentsPath}
+                          isFromMe={isFromMe}
+                        />
+                      ) : isVCard ? (
+                        <VCardAttachment
+                          attachmentId={attachment.ROWID}
+                          filename={attachment.filename}
+                          dbPath={dbPath}
+                          attachmentsPath={attachmentsPath}
+                          isFromMe={isFromMe}
+                        />
+                      ) : isImage ? (
+                        <ImageAttachment
+                          attachmentId={attachment.ROWID}
+                          filename={attachment.filename}
+                          dbPath={dbPath}
+                          attachmentsPath={attachmentsPath}
+                        />
+                      ) : isVideo ? (
+                        <VideoAttachment
+                          attachmentId={attachment.ROWID}
+                          filename={attachment.filename}
+                          dbPath={dbPath}
+                          attachmentsPath={attachmentsPath}
+                        />
+                      ) : (
+                        <div className="bg-black bg-opacity-10 rounded-lg p-2">
+                          <p className="text-[13px]">
+                            📎 {attachment.filename || 'Unknown file'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
+
+          {reactions.length > 0 && (
+            <ReactionIndicator
+              reactions={reactions}
+              isFromMe={isFromMe}
+              onClick={() => setShowReactionModal(true)}
+            />
+          )}
         </div>
       </div>
 

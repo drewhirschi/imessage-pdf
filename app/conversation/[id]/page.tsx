@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -46,8 +46,29 @@ interface ConversationDetails {
   is_group: boolean;
 }
 
-// iPhone-ish viewport width for the messages column. Pro Max is ~430pt.
-const MESSAGE_COLUMN_WIDTH = 430;
+// iPhone-ish viewport widths. Logical pt = CSS px in standard DPR.
+const DEFAULT_COLUMN_WIDTH = 430;
+const MIN_COLUMN_WIDTH = 320;
+const MAX_COLUMN_WIDTH = 820;
+const COLUMN_WIDTH_STORAGE_KEY = 'imessage-column-width';
+const SNAP_POINTS: { width: number; label: string }[] = [
+  { width: 375, label: 'iPhone 8 / SE' },
+  { width: 390, label: 'iPhone 12 / 14' },
+  { width: 393, label: 'iPhone 15 Pro' },
+  { width: 430, label: 'iPhone 15 Pro Max' },
+  { width: 768, label: 'iPad mini' },
+];
+const SNAP_THRESHOLD = 10; // px — within this of a snap point, magnetize.
+
+function snap(raw: number): number {
+  for (const pt of SNAP_POINTS) {
+    if (Math.abs(raw - pt.width) <= SNAP_THRESHOLD) return pt.width;
+  }
+  return raw;
+}
+function labelFor(width: number): string | null {
+  return SNAP_POINTS.find((p) => p.width === width)?.label ?? null;
+}
 
 export default function ConversationPage() {
   const searchParams = useSearchParams();
@@ -92,7 +113,48 @@ function ConversationPageInner() {
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [conversationDetails, setConversationDetails] = useState<ConversationDetails | null>(null);
+  const [columnWidth, setColumnWidth] = useState<number>(DEFAULT_COLUMN_WIDTH);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const PAGE_SIZE = 500;
+
+  useEffect(() => {
+    const saved = localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY);
+    if (saved) {
+      const n = parseInt(saved, 10);
+      if (!Number.isNaN(n) && n >= MIN_COLUMN_WIDTH && n <= MAX_COLUMN_WIDTH) {
+        setColumnWidth(n);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(COLUMN_WIDTH_STORAGE_KEY, String(columnWidth));
+  }, [columnWidth]);
+
+  const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startWidth: columnWidth };
+    setIsDragging(true);
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+  };
+  const onDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    const delta = e.clientX - dragRef.current.startX;
+    // Column is centered, so growing one side grows both. 2x delta = new total width.
+    const raw = Math.min(
+      MAX_COLUMN_WIDTH,
+      Math.max(MIN_COLUMN_WIDTH, dragRef.current.startWidth + delta * 2),
+    );
+    setColumnWidth(snap(raw));
+  };
+  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    setIsDragging(false);
+    (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
+  };
+  const currentSnapLabel = labelFor(columnWidth);
 
   const fetchMessages = useCallback(async (pageNum: number, reset: boolean = false) => {
     try {
@@ -342,11 +404,36 @@ function ConversationPageInner() {
     </aside>
   );
 
+  const isGroup = conversationDetails?.is_group ?? false;
+
   const messageColumn = (
     <div
-      className="mx-auto bg-white flex flex-col h-full w-full shadow-sm"
-      style={{ maxWidth: `${MESSAGE_COLUMN_WIDTH}px` }}
+      className="mx-auto bg-white flex flex-col h-full w-full shadow-sm relative"
+      style={{ maxWidth: `${columnWidth}px` }}
     >
+      {/* Drag handle on the right edge — column is centered so width grows symmetrically. */}
+      <div
+        onPointerDown={startDrag}
+        onPointerMove={onDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        title={`${columnWidth}px${currentSnapLabel ? ` — ${currentSnapLabel}` : ''}`}
+        className="hidden lg:flex absolute top-0 -right-1 h-full w-2 cursor-col-resize group items-center justify-center z-10 select-none touch-none"
+      >
+        <div
+          className={`h-16 w-[3px] rounded-full transition-colors ${
+            isDragging
+              ? 'bg-blue-500 opacity-100'
+              : 'bg-gray-400 opacity-60 group-hover:bg-blue-500 group-hover:opacity-100'
+          }`}
+        />
+      </div>
+      {/* Floating width readout during drag */}
+      {isDragging && (
+        <div className="hidden lg:block absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none bg-gray-900 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg">
+          {columnWidth}px{currentSnapLabel ? ` · ${currentSnapLabel}` : ''}
+        </div>
+      )}
       <div id="scrollableDiv" className="flex-1 overflow-y-auto px-3 py-4">
         {loading && messages.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-gray-500 text-sm">
@@ -377,43 +464,62 @@ function ConversationPageInner() {
             }
             scrollableTarget="scrollableDiv"
           >
-            <div className="space-y-1">
+            <div>
               {messages.map((messageData, index) => {
-                const prevMessage = index > 0 ? messages[index - 1].message : null;
-                const currentMessage = messageData.message;
+                const prev = index > 0 ? messages[index - 1] : null;
+                const next = index < messages.length - 1 ? messages[index + 1] : null;
+                const current = messageData;
 
-                const showTimestamp = Boolean(
-                  index === 0 ||
-                    (prevMessage && isMoreThan5MinutesApart(prevMessage.date, currentMessage.date)),
-                );
+                const sameSender = (
+                  a: MessageWithAttachments | null,
+                  b: MessageWithAttachments,
+                ) =>
+                  !!a &&
+                  a.message.is_from_me === b.message.is_from_me &&
+                  (a.handle?.id ?? null) === (b.handle?.id ?? null);
+
+                const timeGapBefore =
+                  !prev || isMoreThan5MinutesApart(prev.message.date, current.message.date);
+                const timeGapAfter =
+                  !next || isMoreThan5MinutesApart(current.message.date, next.message.date);
+
+                const showTimestamp = Boolean(timeGapBefore);
 
                 const showDateSeparator = Boolean(
                   index === 0 ||
-                    (prevMessage && isDifferentDay(prevMessage.date, currentMessage.date)),
+                    (prev && isDifferentDay(prev.message.date, current.message.date)),
                 );
 
-                const currentDate = imessageToDate(currentMessage.date);
+                // Start of a sender-run: previous message was different sender, or gap, or day changed.
+                const isFirstOfRun =
+                  !sameSender(prev, current) || timeGapBefore || showDateSeparator;
+                // End of a sender-run: next is different sender, or big gap, or end of list.
+                const isLastOfRun =
+                  !sameSender(next, current) || timeGapAfter;
+
+                const showSenderLabel =
+                  isGroup && !current.message.is_from_me && isFirstOfRun;
+
+                const currentDate = imessageToDate(current.message.date);
 
                 return (
-                  <div key={messageData.message.ROWID}>
+                  <div key={current.message.ROWID}>
                     {showDateSeparator && (
-                      <div className="flex items-center justify-center my-6">
-                        <div className="bg-gray-200 rounded-full px-4 py-1">
-                          <span className="text-xs font-medium text-gray-600">
-                            {format(currentDate, 'EEEE, MMMM d, yyyy')}
-                          </span>
-                        </div>
+                      <div className="text-center text-[11px] text-[#8E8E93] font-semibold my-4">
+                        {format(currentDate, 'EEEE, MMMM d, yyyy')}
                       </div>
                     )}
 
                     <MessageBubble
-                      message={messageData.message}
-                      handle={messageData.handle}
-                      attachments={messageData.attachments}
-                      reactions={messageData.reactions}
+                      message={current.message}
+                      handle={current.handle}
+                      attachments={current.attachments}
+                      reactions={current.reactions}
                       dbPath={dbPath}
                       attachmentsPath={attachmentsPath}
                       showTimestamp={showTimestamp}
+                      showSenderLabel={showSenderLabel}
+                      isLastOfRun={isLastOfRun}
                     />
                   </div>
                 );

@@ -102,15 +102,16 @@ export function getAllConversations(
       id: string;
     }[];
 
+    const participantIds = participants.map((p) => p.id);
     return {
       chat_id: conv.chat_id,
       chat_identifier: conv.chat_identifier,
       display_name: conv.display_name,
-      participants: participants.map((p) => p.id),
+      participants: participantIds,
       last_message: conv.last_message,
       last_message_date: conv.last_message_date,
       message_count: conv.message_count,
-      is_group: conv.group_id !== null,
+      is_group: participantIds.length > 1,
     };
   });
 
@@ -313,11 +314,12 @@ export function getConversationDetails(chatId: number): {
     id: string;
   }[];
 
+  const participantIds = participants.map((p) => p.id);
   return {
     chat_id: chatId,
     display_name: chat.display_name,
-    participants: participants.map((p) => p.id),
-    is_group: chat.group_id !== null,
+    participants: participantIds,
+    is_group: participantIds.length > 1,
   };
 }
 
