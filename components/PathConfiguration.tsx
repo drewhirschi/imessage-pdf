@@ -5,29 +5,34 @@ import FileExplorer from './FileExplorer';
 import { FileExplorerMode } from '@/lib/types/file-system';
 
 interface PathConfigurationProps {
-  onPathsSet: (dbPath: string, attachmentsPath: string) => void;
+  onPathsSet: (dbPath: string, attachmentsPath: string, contactsPath: string) => void;
 }
+
+const DEFAULT_CONTACTS_PATH = '~/.imessage-pdf/contacts.json';
 
 export default function PathConfiguration({ onPathsSet }: PathConfigurationProps) {
   const [dbPath, setDbPath] = useState('');
   const [attachmentsPath, setAttachmentsPath] = useState('');
+  const [contactsPath, setContactsPath] = useState(DEFAULT_CONTACTS_PATH);
   const [isConfigured, setIsConfigured] = useState(false);
   const [fileExplorerOpen, setFileExplorerOpen] = useState(false);
   const [fileExplorerMode, setFileExplorerMode] = useState<FileExplorerMode>('file');
-  const [fileExplorerTarget, setFileExplorerTarget] = useState<'db' | 'attachments'>('db');
+  const [fileExplorerTarget, setFileExplorerTarget] = useState<'db' | 'attachments' | 'contacts'>('db');
   const dbFileInputRef = useRef<HTMLInputElement>(null);
   const attachmentsFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Load saved paths from localStorage
     const savedDbPath = localStorage.getItem('imessage-db-path');
     const savedAttachmentsPath = localStorage.getItem('imessage-attachments-path');
-    
+    const savedContactsPath = localStorage.getItem('imessage-contacts-path');
+
     if (savedDbPath && savedAttachmentsPath) {
       setDbPath(savedDbPath);
       setAttachmentsPath(savedAttachmentsPath);
+      const contacts = savedContactsPath || DEFAULT_CONTACTS_PATH;
+      setContactsPath(contacts);
       setIsConfigured(true);
-      onPathsSet(savedDbPath, savedAttachmentsPath);
+      onPathsSet(savedDbPath, savedAttachmentsPath, contacts);
     }
   }, [onPathsSet]);
 
@@ -35,16 +40,19 @@ export default function PathConfiguration({ onPathsSet }: PathConfigurationProps
     if (dbPath && attachmentsPath) {
       localStorage.setItem('imessage-db-path', dbPath);
       localStorage.setItem('imessage-attachments-path', attachmentsPath);
+      localStorage.setItem('imessage-contacts-path', contactsPath || DEFAULT_CONTACTS_PATH);
       setIsConfigured(true);
-      onPathsSet(dbPath, attachmentsPath);
+      onPathsSet(dbPath, attachmentsPath, contactsPath || DEFAULT_CONTACTS_PATH);
     }
   };
 
   const handleReset = () => {
     localStorage.removeItem('imessage-db-path');
     localStorage.removeItem('imessage-attachments-path');
+    localStorage.removeItem('imessage-contacts-path');
     setDbPath('');
     setAttachmentsPath('');
+    setContactsPath(DEFAULT_CONTACTS_PATH);
     setIsConfigured(false);
   };
 
@@ -60,11 +68,19 @@ export default function PathConfiguration({ onPathsSet }: PathConfigurationProps
     setFileExplorerOpen(true);
   };
 
+  const handleContactsFileSelect = () => {
+    setFileExplorerMode('file');
+    setFileExplorerTarget('contacts');
+    setFileExplorerOpen(true);
+  };
+
   const handleFileExplorerSelect = (path: string) => {
     if (fileExplorerTarget === 'db') {
       setDbPath(path);
-    } else {
+    } else if (fileExplorerTarget === 'attachments') {
       setAttachmentsPath(path);
+    } else {
+      setContactsPath(path);
     }
     setFileExplorerOpen(false);
   };
@@ -76,10 +92,7 @@ export default function PathConfiguration({ onPathsSet }: PathConfigurationProps
   const handleDbFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // In web browsers, we can't access the full file path for security reasons
-      // The user will need to manually enter the path or use a desktop app
       alert('File selected: ' + file.name + '\n\nNote: Due to browser security restrictions, you may need to manually enter the full file path in the text field above.');
-      // Try to set a reasonable default path based on the filename
       if (file.name === 'chat.db') {
         setDbPath('~/Library/Messages/chat.db');
       }
@@ -89,9 +102,7 @@ export default function PathConfiguration({ onPathsSet }: PathConfigurationProps
   const handleAttachmentsFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // In web browsers, we can't access the full file path for security reasons
       alert('File selected: ' + file.name + '\n\nNote: Due to browser security restrictions, you may need to manually enter the full directory path in the text field above.');
-      // Try to set a reasonable default path
       setAttachmentsPath('~/Library/Messages/Attachments');
     }
   };
@@ -104,7 +115,8 @@ export default function PathConfiguration({ onPathsSet }: PathConfigurationProps
             <h3 className="text-sm font-medium text-green-800">Configuration Complete</h3>
             <p className="text-sm text-green-600 mt-1">
               Database: {dbPath}<br />
-              Attachments: {attachmentsPath}
+              Attachments: {attachmentsPath}<br />
+              Contacts: {contactsPath}
             </p>
           </div>
           <button
@@ -126,7 +138,7 @@ export default function PathConfiguration({ onPathsSet }: PathConfigurationProps
       <p className="text-sm text-blue-700 mb-4">
         Enter the paths to your iMessage database and attachments folder. You can type the paths manually or use the Browse button to select files (note: file picker may not work in all browsers for security reasons).
       </p>
-      
+
       <div className="space-y-4">
         <div>
           <label htmlFor="dbPath" className="block text-sm font-medium text-gray-700 mb-1">
@@ -176,7 +188,7 @@ export default function PathConfiguration({ onPathsSet }: PathConfigurationProps
             Typically located at ~/Library/Messages/chat.db on macOS
           </p>
         </div>
-        
+
         <div>
           <label htmlFor="attachmentsPath" className="block text-sm font-medium text-gray-700 mb-1">
             Attachments Path
@@ -224,7 +236,42 @@ export default function PathConfiguration({ onPathsSet }: PathConfigurationProps
             Typically located at ~/Library/Messages/Attachments on macOS
           </p>
         </div>
-        
+
+        <div>
+          <label htmlFor="contactsPath" className="block text-sm font-medium text-gray-700 mb-1">
+            Contacts File (JSON)
+          </label>
+          <div className="flex space-x-2">
+            <input
+              type="text"
+              id="contactsPath"
+              value={contactsPath}
+              onChange={(e) => setContactsPath(e.target.value)}
+              placeholder={DEFAULT_CONTACTS_PATH}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <button
+              type="button"
+              onClick={handleContactsFileSelect}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Browse Files
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => setContactsPath(DEFAULT_CONTACTS_PATH)}
+              className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
+            >
+              Default
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Maps phone numbers and emails to names. Created automatically on first edit.
+          </p>
+        </div>
+
         <button
           onClick={handleSave}
           disabled={!dbPath || !attachmentsPath}
@@ -233,7 +280,7 @@ export default function PathConfiguration({ onPathsSet }: PathConfigurationProps
           Save Configuration
         </button>
       </div>
-      
+
       <FileExplorer
         isOpen={fileExplorerOpen}
         onClose={handleFileExplorerClose}

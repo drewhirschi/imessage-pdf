@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import { imessageToDate, formatRelativeTime } from '@/lib/utils/timestamp';
+import { useContactsOptional } from './ContactsProvider';
 
 interface Conversation {
   chat_id: number;
@@ -21,11 +22,14 @@ interface Conversation {
 interface ConversationListProps {
   dbPath: string;
   attachmentsPath: string;
+  contactsPath?: string;
 }
 
-export default function ConversationList({ dbPath, attachmentsPath }: ConversationListProps) {
+export default function ConversationList({ dbPath, attachmentsPath, contactsPath }: ConversationListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const contacts = useContactsOptional();
+  const contactEntries = contacts?.entries ?? {};
   
   // Initialize filterText from URL params
   const [filterText, setFilterText] = useState(searchParams.get('phoneNumber') || '');
@@ -44,13 +48,21 @@ export default function ConversationList({ dbPath, attachmentsPath }: Conversati
         setLoading(true);
       }
       setError(null);
-      
+
       const url = new URL('/api/conversations', window.location.origin);
       url.searchParams.set('dbPath', dbPath);
       url.searchParams.set('page', pageNum.toString());
       url.searchParams.set('limit', PAGE_SIZE.toString());
-      if (debouncedFilterText.trim()) {
-        url.searchParams.set('phoneNumber', debouncedFilterText.trim());
+      const q = debouncedFilterText.trim();
+      if (q) {
+        url.searchParams.set('phoneNumber', q);
+        const qLower = q.toLowerCase();
+        const nameMatches = Object.entries(contactEntries)
+          .filter(([, c]) => c?.name && c.name.toLowerCase().includes(qLower))
+          .map(([id]) => id);
+        if (nameMatches.length > 0) {
+          url.searchParams.set('handleIds', nameMatches.join(','));
+        }
       }
       
       const response = await fetch(url.toString());
@@ -77,7 +89,7 @@ export default function ConversationList({ dbPath, attachmentsPath }: Conversati
         setLoading(false);
       }
     }
-  }, [dbPath, debouncedFilterText, PAGE_SIZE]);
+  }, [dbPath, debouncedFilterText, PAGE_SIZE, contactEntries]);
 
   const fetchMoreConversations = useCallback(() => {
     if (!loading && hasMore) {
@@ -110,13 +122,12 @@ export default function ConversationList({ dbPath, attachmentsPath }: Conversati
 
   useEffect(() => {
     if (dbPath && attachmentsPath) {
-      // Reset to page 1 when filter changes
       setPage(1);
       setHasMore(true);
       fetchConversations(1, true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dbPath, attachmentsPath, debouncedFilterText]);
+  }, [dbPath, attachmentsPath, debouncedFilterText, contacts?.loaded]);
 
   const formatLastMessage = (message: string | null) => {
     if (!message) return 'No messages';
@@ -176,7 +187,7 @@ export default function ConversationList({ dbPath, attachmentsPath }: Conversati
           type="text"
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
-          placeholder="Filter by phone number..."
+          placeholder="Filter by name or phone…"
           className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
         />
         {filterText && (
@@ -220,48 +231,63 @@ export default function ConversationList({ dbPath, attachmentsPath }: Conversati
           }
         >
           <div className="space-y-2">
-            {conversations.map((conversation) => (
-          <Link
-            key={conversation.chat_id}
-            href={`/conversation/${conversation.chat_id}?dbPath=${encodeURIComponent(dbPath)}&attachmentsPath=${encodeURIComponent(attachmentsPath)}`}
-            className="block bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center space-x-2">
-                  <h3 className="text-sm font-medium text-gray-900 truncate">
-                    {conversation.display_name || conversation.chat_identifier}
-                  </h3>
-                  {conversation.is_group && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                      Group
-                    </span>
-                  )}
-                </div>
-                
-                <p className="text-sm text-gray-600 mt-1">
-                  {conversation.participants.length > 1 
-                    ? `${conversation.participants.length} participants`
-                    : conversation.participants[0] || 'Unknown'
-                  }
-                </p>
-                
-                <p className="text-sm text-gray-500 mt-1 truncate">
-                  {formatLastMessage(conversation.last_message)}
-                </p>
-              </div>
-              
-              <div className="flex flex-col items-end space-y-1 ml-4">
-                <span className="text-xs text-gray-500">
-                  {formatLastMessageDate(conversation.last_message_date)}
-                </span>
-                <span className="text-xs text-gray-400">
-                  {conversation.message_count} messages
-                </span>
-              </div>
-            </div>
-          </Link>
-        ))}
+            {conversations.map((conversation) => {
+              const resolvedParticipants = conversation.participants.map(
+                (p) => contacts?.resolve(p) ?? p,
+              );
+              const primary =
+                conversation.display_name ||
+                (conversation.participants.length === 1
+                  ? resolvedParticipants[0]
+                  : resolvedParticipants.join(', ')) ||
+                conversation.chat_identifier;
+              const href = new URLSearchParams({
+                dbPath,
+                attachmentsPath,
+                ...(contactsPath ? { contactsPath } : {}),
+              });
+              return (
+                <Link
+                  key={conversation.chat_id}
+                  href={`/conversation/${conversation.chat_id}?${href.toString()}`}
+                  className="block bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2">
+                        <h3 className="text-sm font-medium text-gray-900 truncate">
+                          {primary}
+                        </h3>
+                        {conversation.is_group && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                            Group
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-sm text-gray-600 mt-1 truncate">
+                        {conversation.participants.length > 1
+                          ? `${conversation.participants.length} participants — ${resolvedParticipants.join(', ')}`
+                          : resolvedParticipants[0] || 'Unknown'}
+                      </p>
+
+                      <p className="text-sm text-gray-500 mt-1 truncate">
+                        {formatLastMessage(conversation.last_message)}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col items-end space-y-1 ml-4">
+                      <span className="text-xs text-gray-500">
+                        {formatLastMessageDate(conversation.last_message_date)}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {conversation.message_count} messages
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </InfiniteScroll>
       )}

@@ -4,9 +4,13 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import ImageAttachment from './ImageAttachment';
 import VideoAttachment from './VideoAttachment';
+import VCardAttachment from './VCardAttachment';
+import LocationAttachment from './LocationAttachment';
 import ReactionIndicator from './ReactionIndicator';
 import ReactionDetailsModal from './ReactionDetailsModal';
+import InlineNameEditor from './InlineNameEditor';
 import { imessageToDate } from '@/lib/utils/timestamp';
+import { useContactsOptional } from './ContactsProvider';
 import type { Reaction } from '@/lib/db/types';
 
 interface Message {
@@ -15,7 +19,6 @@ interface Message {
   date: number;
   is_from_me: number;
   handle_id: number | null;
-  // ... other message properties
 }
 
 interface Handle {
@@ -43,10 +46,9 @@ interface MessageBubbleProps {
 
 // Helper function to detect and render URLs as clickable links
 function renderTextWithLinks(text: string, isFromMe: boolean) {
-  // URL regex pattern
   const urlPattern = /(https?:\/\/[^\s]+)/g;
   const parts = text.split(urlPattern);
-  
+
   return parts.map((part, index) => {
     if (part.match(urlPattern)) {
       return (
@@ -65,35 +67,40 @@ function renderTextWithLinks(text: string, isFromMe: boolean) {
   });
 }
 
-export default function MessageBubble({ 
-  message, 
-  handle, 
-  attachments, 
+export default function MessageBubble({
+  message,
+  handle,
+  attachments,
   reactions = [],
-  dbPath, 
+  dbPath,
   attachmentsPath,
   showTimestamp = false,
-  showDateSeparator = false
 }: MessageBubbleProps) {
   const [showReactionModal, setShowReactionModal] = useState(false);
   const isFromMe = message.is_from_me === 1;
-  const sender = isFromMe ? 'You' : (handle?.id || 'Unknown');
+  const contacts = useContactsOptional();
+  const rawSender = handle?.id ?? null;
+  const resolved = rawSender ? contacts?.resolve(rawSender) ?? null : null;
+  const sender = isFromMe ? 'You' : resolved ?? rawSender ?? 'Unknown';
   const timestamp = imessageToDate(message.date);
   const isValidDate = !isNaN(timestamp.getTime());
+  // iMessage inserts U+FFFC (object replacement char) where attachments sit in text
+  const cleanText = message.text?.replace(/\uFFFC/g, '').trim() || null;
 
   return (
     <>
       <div className={`flex ${isFromMe ? 'justify-end' : 'justify-start'} mb-4`}>
         <div className={`max-w-xs lg:max-w-md ${isFromMe ? 'order-2' : 'order-1'}`}>
-          {/* Sender and timestamp - only show when showTimestamp is true */}
           {showTimestamp && (
-            <div className={`text-xs text-gray-500 mb-1 ${isFromMe ? 'text-right' : 'text-left'}`}>
+            <div className={`text-xs text-gray-500 mb-1 flex items-center gap-1 ${isFromMe ? 'justify-end' : 'justify-start'}`}>
               <span className="font-medium">{sender}</span>
-              {isValidDate && <span className="ml-2">{format(timestamp, 'h:mm a')}</span>}
+              {!isFromMe && rawSender && !resolved && contacts?.contactsPath && (
+                <InlineNameEditor handleId={rawSender} />
+              )}
+              {isValidDate && <span className="ml-1">{format(timestamp, 'h:mm a')}</span>}
             </div>
           )}
-          
-          {/* Message bubble with relative positioning for reactions overlay */}
+
           <div className="relative">
             <div
               className={`rounded-2xl px-4 py-2 ${
@@ -102,28 +109,55 @@ export default function MessageBubble({
                   : 'bg-gray-200 text-gray-900 rounded-bl-md'
               }`}
             >
-          {/* Message text */}
-          {message.text && (
-            <p className="text-sm whitespace-pre-wrap break-words">
-              {renderTextWithLinks(message.text, isFromMe)}
-            </p>
-          )}
-          
-              {/* Attachments */}
+              {cleanText && (
+                <p className="text-sm whitespace-pre-wrap break-words">
+                  {renderTextWithLinks(cleanText, isFromMe)}
+                </p>
+              )}
+
               {attachments.length > 0 && (
                 <div className="mt-2 space-y-2">
                   {attachments.map((attachment) => {
-                    // Check if attachment is an image based on mime_type or file extension
-                    const isImage = attachment.mime_type?.startsWith('image/') || 
-                      attachment.filename?.match(/\.(jpg|jpeg|png|gif|webp|heic|heif|pluginPayloadAttachment)$/i);
-                    
-                    // Check if attachment is a video based on mime_type or file extension
-                    const isVideo = attachment.mime_type?.startsWith('video/') || 
-                      attachment.filename?.match(/\.(mov|mp4|avi|webm|m4v|mkv)$/i);
-                    
+                    const mime = attachment.mime_type ?? '';
+                    const filename = attachment.filename ?? '';
+                    const isLocation =
+                      mime === 'text/x-vlocation' ||
+                      /\.loc\.vcf$/i.test(filename);
+                    const isVCard =
+                      !isLocation &&
+                      (mime === 'text/vcard' ||
+                        mime === 'text/x-vcard' ||
+                        /\.vcf$/i.test(filename));
+                    const isImage =
+                      !isVCard &&
+                      !isLocation &&
+                      (mime.startsWith('image/') ||
+                        /\.(jpg|jpeg|png|gif|webp|heic|heif|pluginPayloadAttachment)$/i.test(filename));
+                    const isVideo =
+                      !isVCard &&
+                      !isLocation &&
+                      (mime.startsWith('video/') ||
+                        /\.(mov|mp4|avi|webm|m4v|mkv)$/i.test(filename));
+
                     return (
                       <div key={attachment.ROWID}>
-                        {isImage ? (
+                        {isLocation ? (
+                          <LocationAttachment
+                            attachmentId={attachment.ROWID}
+                            filename={attachment.filename}
+                            dbPath={dbPath}
+                            attachmentsPath={attachmentsPath}
+                            isFromMe={isFromMe}
+                          />
+                        ) : isVCard ? (
+                          <VCardAttachment
+                            attachmentId={attachment.ROWID}
+                            filename={attachment.filename}
+                            dbPath={dbPath}
+                            attachmentsPath={attachmentsPath}
+                            isFromMe={isFromMe}
+                          />
+                        ) : isImage ? (
                           <ImageAttachment
                             attachmentId={attachment.ROWID}
                             filename={attachment.filename}
@@ -151,7 +185,6 @@ export default function MessageBubble({
               )}
             </div>
 
-            {/* Reaction Indicator */}
             {reactions.length > 0 && (
               <ReactionIndicator
                 reactions={reactions}
@@ -163,7 +196,6 @@ export default function MessageBubble({
         </div>
       </div>
 
-      {/* Reaction Details Modal */}
       <ReactionDetailsModal
         reactions={reactions}
         isOpen={showReactionModal}

@@ -11,6 +11,7 @@ import type {
 
 export function getAllConversations(
   phoneNumber?: string,
+  handleIds?: string[],
   limit?: number,
   offset?: number
 ): { conversations: ConversationSummary[]; total: number } {
@@ -34,18 +35,28 @@ export function getAllConversations(
 
   const params: (string | number)[] = [];
 
-  // Add phone number filter if provided
+  const filterClauses: string[] = [];
+  const filterParams: (string | number)[] = [];
   if (phoneNumber) {
+    filterClauses.push("h.id LIKE ?");
+    filterParams.push(`%${phoneNumber}%`);
+  }
+  if (handleIds && handleIds.length > 0) {
+    const placeholders = handleIds.map(() => "?").join(",");
+    filterClauses.push(`h.id IN (${placeholders})`);
+    filterParams.push(...handleIds);
+  }
+  if (filterClauses.length > 0) {
     query += `
       AND EXISTS (
         SELECT 1
         FROM chat_handle_join chj
         JOIN handle h ON chj.handle_id = h.ROWID
         WHERE chj.chat_id = c.ROWID
-        AND h.id LIKE ?
+        AND (${filterClauses.join(" OR ")})
       )
     `;
-    params.push(`%${phoneNumber}%`);
+    params.push(...filterParams);
   }
 
   query += `

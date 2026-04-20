@@ -6,6 +6,7 @@ import {
 } from "@/lib/db/queries";
 import { renderToStream } from "@react-pdf/renderer";
 import MessagePDF from "@/lib/pdf/MessagePDF";
+import { getResolver } from "@/lib/contacts/store";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
@@ -113,10 +114,17 @@ export async function POST(request: NextRequest) {
       chatId,
       dbPath,
       attachmentsPath,
+      contactsPath,
       startDate,
       endDate,
       title = "iMessage Conversation",
     } = body;
+
+    const resolver = getResolver(contactsPath);
+    const resolveName = (id: string | null | undefined) => {
+      if (!id) return null;
+      return resolver.resolve(id);
+    };
 
     if (!chatId || !dbPath) {
       return NextResponse.json(
@@ -162,14 +170,19 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    // Get participants list
+    // Get participants list with resolved names
     const participants = [
       ...new Set(
         messages
-          .map((m) => (m.message.is_from_me ? "You" : m.handle?.id))
-          .filter(Boolean)
+          .map((m) => {
+            if (m.message.is_from_me) return "You";
+            const id = m.handle?.id;
+            if (!id) return null;
+            return resolveName(id) ?? id;
+          })
+          .filter((v): v is string => !!v)
       ),
-    ] as string[];
+    ];
 
     console.log("Generating PDF...");
 
@@ -181,6 +194,7 @@ export async function POST(request: NextRequest) {
         messages: processedMessages,
         startDate: startDate ? parseInt(startDate) : undefined,
         endDate: endDate ? parseInt(endDate) : undefined,
+        nameMap: resolver.nameMap,
       })
     );
 

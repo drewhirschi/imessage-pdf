@@ -8,13 +8,15 @@ interface DateRangePickerProps {
   className?: string;
   initialStartDate?: Date | null;
   initialEndDate?: Date | null;
+  compact?: boolean;
 }
 
-export default function DateRangePicker({ 
-  onDateRangeChange, 
+export default function DateRangePicker({
+  onDateRangeChange,
   className = '',
   initialStartDate = null,
-  initialEndDate = null 
+  initialEndDate = null,
+  compact = false,
 }: DateRangePickerProps) {
   // Temporary state for date inputs (not yet applied)
   const [tempStartDate, setTempStartDate] = useState<Date | null>(initialStartDate);
@@ -67,42 +69,68 @@ export default function DateRangePicker({
     return format(date, 'yyyy-MM-dd');
   };
 
+  const wrapperClass = compact
+    ? className
+    : `bg-white border border-gray-200 rounded-lg p-4 ${className}`;
+  const inputGrid = compact
+    ? 'grid grid-cols-2 gap-2'
+    : 'grid grid-cols-1 md:grid-cols-2 gap-4';
+
   return (
-    <div className={`bg-white border border-gray-200 rounded-lg p-4 ${className}`}>
-      <h3 className="text-sm font-medium text-gray-900 mb-3">Filter by Date Range</h3>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className={wrapperClass}>
+      {!compact && (
+        <h3 className="text-sm font-medium text-gray-900 mb-3">Filter by Date Range</h3>
+      )}
+
+      <div className={inputGrid}>
         <div>
-          <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">
-            Start Date
+          <label htmlFor="startDate" className="block text-xs font-medium text-gray-600 mb-1">
+            Start
           </label>
           <input
             type="date"
             id="startDate"
             value={tempStartDate ? formatDateForInput(tempStartDate) : ''}
             onChange={(e) => handleStartDateChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
-        
+
         <div>
-          <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">
-            End Date
+          <label htmlFor="endDate" className="block text-xs font-medium text-gray-600 mb-1">
+            End
           </label>
           <input
             type="date"
             id="endDate"
             value={tempEndDate ? formatDateForInput(tempEndDate) : ''}
             onChange={(e) => handleEndDateChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
       </div>
-      
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <div className="flex-1">
+
+      <div className={`${compact ? 'mt-2' : 'mt-4'} flex items-center gap-2`}>
+        <button
+          onClick={clearDates}
+          disabled={!hasSelection}
+          className="flex-1 px-3 py-1.5 text-xs text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Clear
+        </button>
+        <button
+          onClick={applyDates}
+          disabled={!hasSelection || !hasChanges}
+          className="flex-1 px-3 py-1.5 text-xs text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+        >
+          Apply
+        </button>
+      </div>
+
+      {!compact && (
+        <div className="mt-3 text-sm">
           {appliedStartDate || appliedEndDate ? (
-            <div className="text-sm text-gray-600">
+            <div className="text-gray-600">
               {appliedStartDate && appliedEndDate && (
                 <span>
                   Showing messages from {format(appliedStartDate, 'MMM d, yyyy')} to {format(appliedEndDate, 'MMM d, yyyy')}
@@ -120,29 +148,12 @@ export default function DateRangePicker({
               )}
             </div>
           ) : (
-            <div className="text-sm text-gray-500">
+            <div className="text-gray-500">
               Showing all messages
             </div>
           )}
         </div>
-        
-        <div className="flex gap-2">
-          <button
-            onClick={clearDates}
-            disabled={!hasSelection}
-            className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Clear
-          </button>
-          <button
-            onClick={applyDates}
-            disabled={!hasSelection || !hasChanges}
-            className="px-4 py-2 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            Apply Filter
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

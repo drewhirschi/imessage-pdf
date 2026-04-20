@@ -16,24 +16,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <div className="min-h-screen bg-background">
-          <header className="bg-card shadow-sm border-b border-border">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex justify-between items-center py-4">
-                <h1 className="text-2xl font-bold text-foreground">
-                  iMessage PDF Exporter
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  Export your conversations to printable PDFs
-                </p>
-              </div>
-            </div>
-          </header>
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {children}
-          </main>
-        </div>
+      <body className={`${inter.className} bg-background text-foreground min-h-screen`}>
+        {children}
       </body>
     </html>
   );

@@ -1,19 +1,24 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import PathConfiguration from '@/components/PathConfiguration';
 import ConversationList from '@/components/ConversationList';
+import { ContactsProvider } from '@/components/ContactsProvider';
+import PageChrome from '@/components/PageChrome';
 
 export default function HomePage() {
   const [dbPath, setDbPath] = useState('');
   const [attachmentsPath, setAttachmentsPath] = useState('');
+  const [contactsPath, setContactsPath] = useState('');
 
-  const handlePathsSet = (db: string, attachments: string) => {
+  const handlePathsSet = (db: string, attachments: string, contacts: string) => {
     setDbPath(db);
     setAttachmentsPath(attachments);
+    setContactsPath(contacts);
   };
 
-  return (
+  const content = (
     <div className="space-y-6">
       <div className="text-center">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -27,7 +32,21 @@ export default function HomePage() {
       <PathConfiguration onPathsSet={handlePathsSet} />
 
       {dbPath && attachmentsPath && (
-        <ConversationList dbPath={dbPath} attachmentsPath={attachmentsPath} />
+        <>
+          <div className="flex justify-end">
+            <Link
+              href={`/contacts?dbPath=${encodeURIComponent(dbPath)}&contactsPath=${encodeURIComponent(contactsPath)}`}
+              className="text-sm text-blue-600 hover:text-blue-800 underline"
+            >
+              Edit contacts book →
+            </Link>
+          </div>
+          <ConversationList
+            dbPath={dbPath}
+            attachmentsPath={attachmentsPath}
+            contactsPath={contactsPath}
+          />
+        </>
       )}
 
       {!dbPath && !attachmentsPath && (
@@ -41,5 +60,11 @@ export default function HomePage() {
         </div>
       )}
     </div>
+  );
+
+  return (
+    <ContactsProvider contactsPath={contactsPath}>
+      <PageChrome>{content}</PageChrome>
+    </ContactsProvider>
   );
 }

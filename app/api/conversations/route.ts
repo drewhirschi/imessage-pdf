@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const dbPath = searchParams.get("dbPath");
     const phoneNumber = searchParams.get("phoneNumber");
+    const handleIdsRaw = searchParams.get("handleIds");
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "50", 10);
 
@@ -17,14 +18,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Calculate offset
     const offset = (page - 1) * limit;
 
-    // Connect to the database
     connectToDatabase(dbPath);
 
-    // Get paginated conversations, optionally filtered by phone number
-    const result = getAllConversations(phoneNumber || undefined, limit, offset);
+    const handleIds = handleIdsRaw
+      ? handleIdsRaw.split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+
+    const result = getAllConversations(
+      phoneNumber || undefined,
+      handleIds,
+      limit,
+      offset
+    );
 
     return NextResponse.json({
       conversations: result.conversations,

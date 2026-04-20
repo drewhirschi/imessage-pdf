@@ -3,6 +3,8 @@
 import { format } from 'date-fns';
 import Image from 'next/image';
 import { imessageToDate } from '@/lib/utils/timestamp';
+import { useContactsOptional } from './ContactsProvider';
+import InlineNameEditor from './InlineNameEditor';
 import type { Reaction, ReactionType } from '@/lib/db/types';
 
 interface ReactionDetailsModalProps {
@@ -20,11 +22,12 @@ const reactionConfig: Record<ReactionType, { icon: string; label: string; emoji:
   question: { icon: '/reactions/question.svg', label: 'Questioned', emoji: '❓' },
 };
 
-export default function ReactionDetailsModal({ 
-  reactions, 
-  onClose, 
-  isOpen 
+export default function ReactionDetailsModal({
+  reactions,
+  onClose,
+  isOpen
 }: ReactionDetailsModalProps) {
+  const contacts = useContactsOptional();
   if (!isOpen || reactions.length === 0) return null;
 
   // Group reactions by type
@@ -87,18 +90,29 @@ export default function ReactionDetailsModal({
                   <div className="divide-y">
                     {typeReactions.map((reaction) => {
                       const timestamp = imessageToDate(reaction.date);
-                      const sender = reaction.is_from_me === 1 
-                        ? 'You' 
-                        : (reaction.sender_id || 'Unknown');
-                      
+                      const resolved = reaction.sender_id
+                        ? contacts?.resolve(reaction.sender_id) ?? null
+                        : null;
+                      const sender = reaction.is_from_me === 1
+                        ? 'You'
+                        : resolved ?? reaction.sender_id ?? 'Unknown';
+
                       return (
-                        <div 
-                          key={reaction.ROWID} 
+                        <div
+                          key={reaction.ROWID}
                           className="px-4 py-3 hover:bg-gray-50 transition-colors"
                         >
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-gray-900">{sender}</span>
-                            <span className="text-xs text-gray-500">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-medium text-gray-900 truncate">{sender}</span>
+                              {reaction.is_from_me !== 1 &&
+                                reaction.sender_id &&
+                                !resolved &&
+                                contacts?.contactsPath && (
+                                  <InlineNameEditor handleId={reaction.sender_id} />
+                                )}
+                            </div>
+                            <span className="text-xs text-gray-500 flex-shrink-0">
                               {format(timestamp, 'MMM d, h:mm a')}
                             </span>
                           </div>

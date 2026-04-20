@@ -49,15 +49,35 @@ interface MessagePDFProps {
   messages: MessageWithAttachments[];
   startDate?: number;
   endDate?: number;
+  nameMap?: Record<string, string>;
 }
 
-export default function MessagePDF({ 
-  title, 
-  participants, 
-  messages, 
-  startDate, 
-  endDate 
+function normalizeHandle(h: string): string {
+  if (h.includes('@')) return h.toLowerCase().trim();
+  return h.replace(/\D/g, '');
+}
+
+function makeResolver(nameMap: Record<string, string> | undefined) {
+  if (!nameMap) return (id: string | null | undefined) => id ?? null;
+  const normMap = new Map<string, string>();
+  for (const [k, v] of Object.entries(nameMap)) {
+    normMap.set(normalizeHandle(k), v);
+  }
+  return (id: string | null | undefined) => {
+    if (!id) return null;
+    return nameMap[id] ?? normMap.get(normalizeHandle(id)) ?? id;
+  };
+}
+
+export default function MessagePDF({
+  title,
+  participants,
+  messages,
+  startDate,
+  endDate,
+  nameMap,
 }: MessagePDFProps) {
+  const resolveName = makeResolver(nameMap);
   const formatDate = (timestamp: number) => {
     return format(imessageToDate(timestamp), 'MMM d, yyyy h:mm a');
   };
@@ -96,7 +116,9 @@ export default function MessagePDF({
         acc[emoji] = { count: 0, senders: [] };
       }
       acc[emoji].count++;
-      const sender = reaction.is_from_me === 1 ? 'You' : (reaction.sender_id || 'Unknown');
+      const sender = reaction.is_from_me === 1
+        ? 'You'
+        : (resolveName(reaction.sender_id) || reaction.sender_id || 'Unknown');
       acc[emoji].senders.push(sender);
       return acc;
     }, {} as Record<string, { count: number; senders: string[] }>);
@@ -138,7 +160,9 @@ export default function MessagePDF({
             {dateMessages.map((messageData) => {
               const { message, handle, attachments, reactions } = messageData;
               const isFromMe = message.is_from_me === 1;
-              const sender = isFromMe ? 'You' : (handle?.id || 'Unknown');
+              const sender = isFromMe
+                ? 'You'
+                : (resolveName(handle?.id) || handle?.id || 'Unknown');
               const reactionText = formatReactions(reactions);
               
               return (
@@ -148,10 +172,13 @@ export default function MessagePDF({
                     styles.messageBubble,
                     isFromMe ? styles.sentMessage : styles.receivedMessage
                   ]}>
-                    {/* Message text */}
-                    {message.text && (
-                      <Text style={styles.messageText}>{message.text}</Text>
-                    )}
+                    {/* Message text — strip U+FFFC attachment placeholder */}
+                    {(() => {
+                      const cleaned = message.text?.replace(/\uFFFC/g, '').trim();
+                      return cleaned ? (
+                        <Text style={styles.messageText}>{cleaned}</Text>
+                      ) : null;
+                    })()}
                     
                     {/* Attachments */}
                     {attachments.length > 0 && (
