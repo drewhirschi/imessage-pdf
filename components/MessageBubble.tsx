@@ -120,7 +120,7 @@ export default function MessageBubble({
         </div>
       )}
 
-      <div className={`relative flex ${isFromMe ? 'justify-end' : 'justify-start'} ${isLastOfRun ? 'mb-2' : 'mb-0.5'} ${reactions.length > 0 ? 'mt-5' : ''}`}>
+      <div className={`relative flex ${isFromMe ? 'justify-end' : 'justify-start'} ${isLastOfRun ? 'mb-2' : 'mb-0.5'} ${reactions.length > 0 ? 'mt-6' : ''}`}>
         {/* Swipe-revealed exact timestamp — sits outside the bubble row, revealed when the list pans left. */}
         {isValidDate && (
           <span className="absolute top-1/2 -translate-y-1/2 right-[-58px] w-12 text-right text-[11px] text-[#8E8E93] whitespace-nowrap pointer-events-none select-none">

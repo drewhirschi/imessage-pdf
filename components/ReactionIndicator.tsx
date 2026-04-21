@@ -41,7 +41,11 @@ export default function ReactionIndicator({
           onClick();
         }
       }}
-      className={`absolute -top-4 ${isFromMe ? 'left-1' : 'right-1'} flex items-center cursor-pointer transition-transform hover:scale-105`}
+      // Sit on the bubble's inside edge (the corner facing the other side
+      // of the conversation) and slightly above the top — matching iMessage,
+      // where the tapback straddles the corner rather than sitting fully
+      // inside the bubble.
+      className={`absolute -top-5 ${isFromMe ? '-left-3' : '-right-3'} flex items-center cursor-pointer transition-transform hover:scale-105`}
     >
       {visible.map(([type, { count, mine }], index) => {
         const bgClass = mine

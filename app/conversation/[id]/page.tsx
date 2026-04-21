@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { format } from 'date-fns';
-import MessageBubble from '@/components/MessageBubble';
 import DateRangePicker from '@/components/DateRangePicker';
 import InfiniteScroll from 'react-infinite-scroll-component';
-import { imessageToDate, isMoreThan5MinutesApart, isDifferentDay, unixToImessageTimestamp } from '@/lib/utils/timestamp';
+import MessageList from '@/components/MessageList';
+import PDFOptionsDialog, { type PDFOptions } from '@/components/PDFOptionsDialog';
+import { unixToImessageTimestamp } from '@/lib/utils/timestamp';
 import { ContactsProvider, useContactsOptional } from '@/components/ContactsProvider';
 import InlineNameEditor from '@/components/InlineNameEditor';
 import SwipeForTimestamps from '@/components/SwipeForTimestamps';
@@ -110,6 +111,7 @@ function ConversationPageInner() {
   const [startDate, setStartDate] = useState<Date | null>(getInitialDateFromURL('startDate'));
   const [endDate, setEndDate] = useState<Date | null>(getInitialDateFromURL('endDate'));
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
@@ -251,12 +253,12 @@ function ConversationPageInner() {
     router.replace(`${window.location.pathname}?${params.toString()}`, { scroll: false });
   };
 
-  const generatePDF = async () => {
+  const submitPDFRequest = async (opts: PDFOptions) => {
     try {
       setGeneratingPDF(true);
 
-      let startImessageTimestamp = null;
-      let endImessageTimestamp = null;
+      let startImessageTimestamp: number | null = null;
+      let endImessageTimestamp: number | null = null;
 
       if (startDate) {
         const unixTimestamp = Math.floor(startDate.getTime() / 1000);
@@ -280,7 +282,11 @@ function ConversationPageInner() {
           contactsPath,
           startDate: startImessageTimestamp,
           endDate: endImessageTimestamp,
-          title: `iMessage Conversation - ${chatId}`,
+          pageSize: opts.pageSize,
+          customWidthIn: opts.customWidthIn,
+          customHeightIn: opts.customHeightIn,
+          marginIn: opts.marginIn,
+          columnWidthPx: opts.columnWidthPx,
         }),
       });
 
@@ -297,6 +303,7 @@ function ConversationPageInner() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      setPdfDialogOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate PDF');
     } finally {
@@ -395,7 +402,7 @@ function ConversationPageInner() {
 
       <div className="p-4">
         <button
-          onClick={generatePDF}
+          onClick={() => setPdfDialogOpen(true)}
           disabled={generatingPDF || messages.length === 0}
           className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
         >
@@ -466,65 +473,12 @@ function ConversationPageInner() {
             scrollableTarget="scrollableDiv"
           >
             <SwipeForTimestamps>
-              {messages.map((messageData, index) => {
-                const prev = index > 0 ? messages[index - 1] : null;
-                const next = index < messages.length - 1 ? messages[index + 1] : null;
-                const current = messageData;
-
-                const sameSender = (
-                  a: MessageWithAttachments | null,
-                  b: MessageWithAttachments,
-                ) =>
-                  !!a &&
-                  a.message.is_from_me === b.message.is_from_me &&
-                  (a.handle?.id ?? null) === (b.handle?.id ?? null);
-
-                const timeGapBefore =
-                  !prev || isMoreThan5MinutesApart(prev.message.date, current.message.date);
-                const timeGapAfter =
-                  !next || isMoreThan5MinutesApart(current.message.date, next.message.date);
-
-                const showTimestamp = Boolean(timeGapBefore);
-
-                const showDateSeparator = Boolean(
-                  index === 0 ||
-                    (prev && isDifferentDay(prev.message.date, current.message.date)),
-                );
-
-                // Start of a sender-run: previous message was different sender, or gap, or day changed.
-                const isFirstOfRun =
-                  !sameSender(prev, current) || timeGapBefore || showDateSeparator;
-                // End of a sender-run: next is different sender, or big gap, or end of list.
-                const isLastOfRun =
-                  !sameSender(next, current) || timeGapAfter;
-
-                const showSenderLabel =
-                  isGroup && !current.message.is_from_me && isFirstOfRun;
-
-                const currentDate = imessageToDate(current.message.date);
-
-                return (
-                  <div key={current.message.ROWID}>
-                    {showDateSeparator && (
-                      <div className="text-center text-[11px] text-[#8E8E93] font-semibold my-4">
-                        {format(currentDate, 'EEEE, MMMM d, yyyy')}
-                      </div>
-                    )}
-
-                    <MessageBubble
-                      message={current.message}
-                      handle={current.handle}
-                      attachments={current.attachments}
-                      reactions={current.reactions}
-                      dbPath={dbPath}
-                      attachmentsPath={attachmentsPath}
-                      showTimestamp={showTimestamp}
-                      showSenderLabel={showSenderLabel}
-                      isLastOfRun={isLastOfRun}
-                    />
-                  </div>
-                );
-              })}
+              <MessageList
+                messages={messages}
+                isGroup={isGroup}
+                dbPath={dbPath}
+                attachmentsPath={attachmentsPath}
+              />
             </SwipeForTimestamps>
           </InfiniteScroll>
         )}
@@ -538,6 +492,13 @@ function ConversationPageInner() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-100">
         {messageColumn}
       </main>
+      <PDFOptionsDialog
+        open={pdfDialogOpen}
+        onOpenChange={(v) => !generatingPDF && setPdfDialogOpen(v)}
+        defaultColumnWidthPx={columnWidth}
+        onSubmit={submitPDFRequest}
+        submitting={generatingPDF}
+      />
     </div>
   );
 }

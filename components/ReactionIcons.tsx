@@ -31,10 +31,10 @@ export default function ReactionIcon({ type, className = 'w-4 h-4' }: Props) {
         <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
           <text
             x="12"
-            y="16.5"
+            y="18"
             textAnchor="middle"
             fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif"
-            fontSize="11"
+            fontSize="15"
             fontWeight="800"
             letterSpacing="-0.5"
           >
@@ -45,10 +45,10 @@ export default function ReactionIcon({ type, className = 'w-4 h-4' }: Props) {
     case 'emphasize':
       return (
         <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
-          <rect x="8.25" y="5" width="2.25" height="10" rx="1" />
-          <circle cx="9.375" cy="17.75" r="1.35" />
-          <rect x="13.5" y="5" width="2.25" height="10" rx="1" />
-          <circle cx="14.625" cy="17.75" r="1.35" />
+          <rect x="7.5" y="3.5" width="3" height="13" rx="1.25" />
+          <circle cx="9" cy="19.5" r="1.75" />
+          <rect x="13.5" y="3.5" width="3" height="13" rx="1.25" />
+          <circle cx="15" cy="19.5" r="1.75" />
         </svg>
       );
     case 'question':
@@ -56,10 +56,10 @@ export default function ReactionIcon({ type, className = 'w-4 h-4' }: Props) {
         <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
           <text
             x="12"
-            y="18"
+            y="19.5"
             textAnchor="middle"
             fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif"
-            fontSize="16"
+            fontSize="21"
             fontWeight="800"
           >
             ?
