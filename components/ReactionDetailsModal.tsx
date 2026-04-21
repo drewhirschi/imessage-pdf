@@ -1,10 +1,10 @@
 'use client';
 
 import { format } from 'date-fns';
-import Image from 'next/image';
 import { imessageToDate } from '@/lib/utils/timestamp';
 import { useContactsOptional } from './ContactsProvider';
 import InlineNameEditor from './InlineNameEditor';
+import ReactionIcon, { reactionLabels } from './ReactionIcons';
 import type { Reaction, ReactionType } from '@/lib/db/types';
 
 interface ReactionDetailsModalProps {
@@ -13,14 +13,6 @@ interface ReactionDetailsModalProps {
   isOpen: boolean;
 }
 
-const reactionConfig: Record<ReactionType, { icon: string; label: string; emoji: string }> = {
-  heart: { icon: '/reactions/heart.svg', label: 'Loved', emoji: '❤️' },
-  thumbs_up: { icon: '/reactions/thumbs-up.svg', label: 'Liked', emoji: '👍' },
-  thumbs_down: { icon: '/reactions/thumbs-down.svg', label: 'Disliked', emoji: '👎' },
-  laugh: { icon: '/reactions/laugh.svg', label: 'Laughed at', emoji: '😂' },
-  emphasize: { icon: '/reactions/emphasize.svg', label: 'Emphasized', emoji: '‼️' },
-  question: { icon: '/reactions/question.svg', label: 'Questioned', emoji: '❓' },
-};
 
 export default function ReactionDetailsModal({
   reactions,
@@ -69,20 +61,17 @@ export default function ReactionDetailsModal({
           {/* Content */}
           <div className="overflow-y-auto max-h-[calc(80vh-80px)]">
             {Object.entries(groupedReactions).map(([type, typeReactions]) => {
-              const config = reactionConfig[type as ReactionType];
+              const reactionType = type as ReactionType;
+              const label = reactionLabels[reactionType];
               return (
                 <div key={type} className="border-b last:border-b-0">
                   {/* Reaction Type Header */}
                   <div className="flex items-center gap-2 px-4 py-3 bg-gray-50">
-                    <Image 
-                      src={config.icon} 
-                      alt={config.label} 
-                      width={20} 
-                      height={20}
-                      className="flex-shrink-0"
-                    />
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#E9E9EB] text-[#3C3C43] flex items-center justify-center">
+                      <ReactionIcon type={reactionType} className="w-[14px] h-[14px]" />
+                    </div>
                     <span className="font-medium text-gray-900">
-                      {config.label} {typeReactions.length > 1 && `(${typeReactions.length})`}
+                      {label} {typeReactions.length > 1 && `(${typeReactions.length})`}
                     </span>
                   </div>
 

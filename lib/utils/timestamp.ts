@@ -71,15 +71,29 @@ export function formatRelativeTime(date: Date): string {
 }
 
 /**
- * Check if two messages are more than 5 minutes apart
+ * iMessage renders a centered timestamp only on larger gaps (roughly 15–30 min).
+ * 15 min matches observed iOS behavior most closely.
  */
-export function isMoreThan5MinutesApart(
+export const TIMESTAMP_GAP_MINUTES = 15;
+
+export function isLargerThanTimestampGap(
   prevTimestamp: number,
   currentTimestamp: number
 ): boolean {
   const prevDate = imessageToDate(prevTimestamp);
   const currentDate = imessageToDate(currentTimestamp);
-  return differenceInMinutes(currentDate, prevDate) >= 5;
+  return differenceInMinutes(currentDate, prevDate) >= TIMESTAMP_GAP_MINUTES;
+}
+
+/**
+ * Kept as an alias for backwards compat, but now uses the 15-minute threshold.
+ * @deprecated use isLargerThanTimestampGap
+ */
+export function isMoreThan5MinutesApart(
+  prevTimestamp: number,
+  currentTimestamp: number
+): boolean {
+  return isLargerThanTimestampGap(prevTimestamp, currentTimestamp);
 }
 
 /**

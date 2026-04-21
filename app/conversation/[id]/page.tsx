@@ -10,6 +10,7 @@ import InfiniteScroll from 'react-infinite-scroll-component';
 import { imessageToDate, isMoreThan5MinutesApart, isDifferentDay, unixToImessageTimestamp } from '@/lib/utils/timestamp';
 import { ContactsProvider, useContactsOptional } from '@/components/ContactsProvider';
 import InlineNameEditor from '@/components/InlineNameEditor';
+import SwipeForTimestamps from '@/components/SwipeForTimestamps';
 import type { Reaction } from '@/lib/db/types';
 
 interface Message {
@@ -464,7 +465,7 @@ function ConversationPageInner() {
             }
             scrollableTarget="scrollableDiv"
           >
-            <div>
+            <SwipeForTimestamps>
               {messages.map((messageData, index) => {
                 const prev = index > 0 ? messages[index - 1] : null;
                 const next = index < messages.length - 1 ? messages[index + 1] : null;
@@ -524,7 +525,7 @@ function ConversationPageInner() {
                   </div>
                 );
               })}
-            </div>
+            </SwipeForTimestamps>
           </InfiniteScroll>
         )}
       </div>
