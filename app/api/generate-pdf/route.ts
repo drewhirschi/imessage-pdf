@@ -40,7 +40,7 @@ interface PDFBody {
   startDate?: number | string | null;
   endDate?: number | string | null;
   // From PDFOptionsDialog
-  pageSize?: 'Letter' | 'Legal' | 'A4' | 'Tabloid' | 'Custom';
+  pageSize?: 'Letter' | 'Legal' | 'A4' | 'A5' | 'Tabloid' | 'Custom';
   customWidthIn?: number;
   customHeightIn?: number;
   marginIn?: number;

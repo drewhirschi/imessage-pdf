@@ -53,6 +53,19 @@ const DEFAULT_COLUMN_WIDTH = 430;
 const MIN_COLUMN_WIDTH = 320;
 const MAX_COLUMN_WIDTH = 820;
 const COLUMN_WIDTH_STORAGE_KEY = 'imessage-column-width';
+const dateRangeStorageKey = (chatId: string) =>
+  `imessage-pdf:date-range:${chatId}`;
+
+interface PersistedDateRange {
+  startDate: string | null; // yyyy-MM-dd
+  endDate: string | null;
+}
+
+function parseStoredDate(s: string | null): Date | null {
+  if (!s) return null;
+  const d = new Date(`${s}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 const SNAP_POINTS: { width: number; label: string }[] = [
   { width: 375, label: 'iPhone 8 / SE' },
   { width: 390, label: 'iPhone 12 / 14' },
@@ -93,23 +106,41 @@ function ConversationPageInner() {
   const contactsPath = searchParams.get('contactsPath') || '';
   const contacts = useContactsOptional();
 
-  const getInitialDateFromURL = (paramName: string): Date | null => {
-    const dateString = searchParams.get(paramName);
-    if (!dateString) return null;
-    try {
-      const date = new Date(dateString + 'T00:00:00');
-      if (isNaN(date.getTime())) return null;
-      return date;
-    } catch {
-      return null;
+  // Date-range filter precedence on first render:
+  //   1. URL search params (so shared/bookmarked links keep working)
+  //   2. localStorage, keyed per chatId (so the filter sticks across sessions
+  //      and tabs once the user has set it)
+  //   3. null
+  const initialRange = (() => {
+    const fromURL = (name: string): Date | null => {
+      const v = searchParams.get(name);
+      return parseStoredDate(v);
+    };
+    const urlStart = fromURL('startDate');
+    const urlEnd = fromURL('endDate');
+    if (urlStart || urlEnd) return { start: urlStart, end: urlEnd };
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem(dateRangeStorageKey(chatId));
+        if (raw) {
+          const parsed = JSON.parse(raw) as PersistedDateRange;
+          return {
+            start: parseStoredDate(parsed.startDate ?? null),
+            end: parseStoredDate(parsed.endDate ?? null),
+          };
+        }
+      } catch {
+        // ignore
+      }
     }
-  };
+    return { start: null, end: null };
+  })();
 
   const [messages, setMessages] = useState<MessageWithAttachments[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [startDate, setStartDate] = useState<Date | null>(getInitialDateFromURL('startDate'));
-  const [endDate, setEndDate] = useState<Date | null>(getInitialDateFromURL('endDate'));
+  const [startDate, setStartDate] = useState<Date | null>(initialRange.start);
+  const [endDate, setEndDate] = useState<Date | null>(initialRange.end);
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -134,6 +165,21 @@ function ConversationPageInner() {
   useEffect(() => {
     localStorage.setItem(COLUMN_WIDTH_STORAGE_KEY, String(columnWidth));
   }, [columnWidth]);
+
+  // If we hydrated the date range from localStorage (URL had no dates), reflect
+  // it back into the URL so the address bar stays shareable.
+  useEffect(() => {
+    if (!startDate && !endDate) return;
+    const params = new URLSearchParams(window.location.search);
+    const hasURL =
+      params.has('startDate') || params.has('endDate');
+    if (hasURL) return;
+    if (startDate) params.set('startDate', format(startDate, 'yyyy-MM-dd'));
+    if (endDate) params.set('endDate', format(endDate, 'yyyy-MM-dd'));
+    router.replace(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+    // Run once on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -237,20 +283,27 @@ function ConversationPageInner() {
     setEndDate(end);
 
     const params = new URLSearchParams(window.location.search);
+    const startStr = start ? format(start, 'yyyy-MM-dd') : null;
+    const endStr = end ? format(end, 'yyyy-MM-dd') : null;
 
-    if (start) {
-      params.set('startDate', format(start, 'yyyy-MM-dd'));
-    } else {
-      params.delete('startDate');
-    }
-
-    if (end) {
-      params.set('endDate', format(end, 'yyyy-MM-dd'));
-    } else {
-      params.delete('endDate');
-    }
+    if (startStr) params.set('startDate', startStr); else params.delete('startDate');
+    if (endStr) params.set('endDate', endStr); else params.delete('endDate');
 
     router.replace(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+
+    try {
+      const key = dateRangeStorageKey(chatId);
+      if (!startStr && !endStr) {
+        window.localStorage.removeItem(key);
+      } else {
+        window.localStorage.setItem(
+          key,
+          JSON.stringify({ startDate: startStr, endDate: endStr } satisfies PersistedDateRange),
+        );
+      }
+    } catch {
+      // ignore — storage is best-effort
+    }
   };
 
   const submitPDFRequest = async (opts: PDFOptions) => {

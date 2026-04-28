@@ -54,7 +54,7 @@ export default function ReactionIndicator({
         return (
           <div
             key={type}
-            className={`${bgClass} relative flex items-center justify-center rounded-full w-7 h-7 shadow-sm ring-2 ring-white`}
+            className={`${bgClass} relative flex items-center justify-center rounded-full w-7 h-7 shadow-sm ring-2 ring-white print:shadow-none print:ring-0`}
             style={{
               marginLeft: index > 0 ? '-8px' : '0',
               zIndex: visible.length - index,
@@ -62,7 +62,7 @@ export default function ReactionIndicator({
           >
             <ReactionIcon type={type} className="w-[14px] h-[14px]" />
             {count > 1 && (
-              <span className="absolute -bottom-0.5 -right-1 bg-gray-800 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-1 ring-1 ring-white">
+              <span className="absolute -bottom-0.5 -right-1 bg-gray-800 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-1 ring-1 ring-white print:ring-0">
                 {count}
               </span>
             )}
@@ -71,7 +71,7 @@ export default function ReactionIndicator({
       })}
       {hidden > 0 && (
         <div
-          className="ml-1 bg-gray-800 text-white text-[10px] font-semibold rounded-full px-1.5 py-0.5 ring-2 ring-white"
+          className="ml-1 bg-gray-800 text-white text-[10px] font-semibold rounded-full px-1.5 py-0.5 ring-2 ring-white print:ring-0"
           style={{ zIndex: 0 }}
         >
           +{hidden}

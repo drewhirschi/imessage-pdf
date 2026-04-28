@@ -28,12 +28,13 @@ export interface PDFOptions {
   columnWidthPx: number;
 }
 
-export type PageSizeKey = 'Letter' | 'Legal' | 'A4' | 'Tabloid' | 'Custom';
+export type PageSizeKey = 'Letter' | 'Legal' | 'A4' | 'A5' | 'Tabloid' | 'Custom';
 
 const PRESETS: Record<Exclude<PageSizeKey, 'Custom'>, { w: number; h: number }> = {
   Letter: { w: 8.5, h: 11 },
   Legal: { w: 8.5, h: 14 },
   A4: { w: 8.27, h: 11.69 },
+  A5: { w: 5.83, h: 8.27 },
   Tabloid: { w: 11, h: 17 },
 };
 
@@ -92,6 +93,7 @@ export default function PDFOptionsDialog({
                 <SelectItem value="Letter">Letter (8.5 × 11 in)</SelectItem>
                 <SelectItem value="Legal">Legal (8.5 × 14 in)</SelectItem>
                 <SelectItem value="A4">A4 (8.27 × 11.69 in)</SelectItem>
+                <SelectItem value="A5">A5 (5.83 × 8.27 in)</SelectItem>
                 <SelectItem value="Tabloid">Tabloid (11 × 17 in)</SelectItem>
                 <SelectItem value="Custom">Custom…</SelectItem>
               </SelectContent>

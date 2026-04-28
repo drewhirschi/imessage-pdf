@@ -46,6 +46,10 @@ interface MessageBubbleProps {
   showSenderLabel?: boolean;
   /** This is the last message in the sender's run — render the "tail" corner. */
   isLastOfRun?: boolean;
+  /** Multiplier on font, padding, line-height, radii, and run spacing. 1 = native iMessage. */
+  scale?: number;
+  /** Hide the swipe-revealed exact-timestamp glyph (used by static print contexts). */
+  hideSwipeTimestamp?: boolean;
 }
 
 function renderTextWithLinks(text: string, isFromMe: boolean) {
@@ -80,6 +84,8 @@ export default function MessageBubble({
   showTimestamp = false,
   showSenderLabel = false,
   isLastOfRun = true,
+  scale = 1,
+  hideSwipeTimestamp = false,
 }: MessageBubbleProps) {
   const [showReactionModal, setShowReactionModal] = useState(false);
   const isFromMe = message.is_from_me === 1;
@@ -91,15 +97,20 @@ export default function MessageBubble({
   const isValidDate = !isNaN(timestamp.getTime());
   const cleanText = message.text?.replace(/\uFFFC/g, '').trim() || null;
 
-  // iOS 14 iMessage colors + radii
+  // iOS 14 iMessage colors + radii. All sizes flow through `scale` so the
+  // cover generator can render the same component at 2× / 3× while keeping
+  // pixel-identical proportions to the live conversation viewer (scale=1).
   const bubbleColorClass = isFromMe
     ? 'bg-[#007AFF] text-white'
     : 'bg-[#E9E9EB] text-black';
-  const tailCorner = isLastOfRun
-    ? isFromMe
-      ? 'rounded-br-[4px]'
-      : 'rounded-bl-[4px]'
-    : '';
+  const radius = 18 * scale;
+  const tailRadius = 4 * scale;
+  const padX = 12 * scale;
+  const padY = 6 * scale;
+  const fontSize = 15 * scale;
+  const lineHeight = 20 * scale;
+  const runMarginPx = (isLastOfRun ? 8 : 2) * scale;
+  const reactionMarginTopPx = reactions.length > 0 ? 24 * scale : 0;
 
   return (
     <>
@@ -120,18 +131,30 @@ export default function MessageBubble({
         </div>
       )}
 
-      <div className={`relative flex ${isFromMe ? 'justify-end' : 'justify-start'} ${isLastOfRun ? 'mb-2' : 'mb-0.5'} ${reactions.length > 0 ? 'mt-6' : ''}`}>
+      <div
+        className={`relative flex ${isFromMe ? 'justify-end' : 'justify-start'}`}
+        style={{
+          marginBottom: runMarginPx,
+          marginTop: reactionMarginTopPx,
+        }}
+      >
         {/* Swipe-revealed exact timestamp — sits outside the bubble row, revealed when the list pans left. */}
-        {isValidDate && (
+        {isValidDate && !hideSwipeTimestamp && (
           <span className="absolute top-1/2 -translate-y-1/2 right-[-58px] w-12 text-right text-[11px] text-[#8E8E93] whitespace-nowrap pointer-events-none select-none">
             {format(timestamp, 'h:mm a')}
           </span>
         )}
         <div className={`max-w-[75%] ${isFromMe ? 'order-2' : 'order-1'} relative`}>
           <div
-            className={`rounded-[18px] ${tailCorner} px-3 py-[6px] ${bubbleColorClass} text-[15px] leading-[20px]`}
+            className={bubbleColorClass}
             style={{
               fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif',
+              fontSize: `${fontSize}px`,
+              lineHeight: `${lineHeight}px`,
+              padding: `${padY}px ${padX}px`,
+              borderRadius: `${radius}px`,
+              borderBottomRightRadius: `${isFromMe && isLastOfRun ? tailRadius : radius}px`,
+              borderBottomLeftRadius: `${!isFromMe && isLastOfRun ? tailRadius : radius}px`,
             }}
           >
             {cleanText && (
