@@ -132,6 +132,39 @@ On macOS, you may need to grant Terminal (or your code editor) permission to acc
 - `GET /api/attachments/[id]` - Serve attachment files
 - `POST /api/generate-pdf` - Generate PDF from conversation
 
+## Troubleshooting (macOS)
+
+A few issues that come up when running this on macOS:
+
+### "No Chromium binary found" during PDF generation
+
+PDF generation uses Puppeteer, which looks for a Chrome/Chromium binary at hardcoded Linux paths (`/usr/bin/chromium`, `/usr/bin/google-chrome`, etc.). These don't exist on macOS, so PDF generation fails out of the box.
+
+**Fix:** point it at your installed Chrome (or a Puppeteer-managed one) via an environment variable before starting the dev server:
+
+```bash
+export PUPPETEER_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+npm run dev
+```
+
+If you don't have Chrome installed, you can have Puppeteer download its own copy instead:
+
+```bash
+npx puppeteer browsers install chrome
+```
+
+This prints an install path — use that path as `PUPPETEER_EXECUTABLE_PATH` instead.
+
+### Message text exports blank for recent messages
+
+Since roughly iOS 16 / macOS Ventura, Apple stores message text for many messages inside the binary `attributedBody` column instead of the plain `text` column. This app now decodes `attributedBody` as a fallback when `text` is empty — see `lib/db/decodeAttributedBody.ts`. It reads the length-prefixed string that Apple's typedstream format encodes right after the `NSString` marker.
+
+### Images/attachments show "not available" even though the message has an attachment
+
+If an attachment was never downloaded from iCloud (common for older messages you haven't scrolled to in a while), it won't exist locally at the path this app expects, and the image will fail to load.
+
+**Workaround:** open Messages.app, jump to the very start of the conversation (e.g. search for a known early message and jump to it), then slowly scroll down through the whole thread. This forces Messages to load history and download attachments for everything it renders along the way. There's no known way to force a bulk iCloud attachment download outside of this scrolling behavior — Apple doesn't expose it as an API.
+
 ## License
 
 This project is for personal use. Please respect Apple's terms of service and privacy policies when using this tool.
