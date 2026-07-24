@@ -1,6 +1,6 @@
 # Plan: PDF Export That Matches the Web Rendering
 
-**Status:** in progress
+**Status:** shipped (2026-04-20, commit d6cb352). Headless-Chromium print pipeline, print route, and options dialog are in.
 
 ## Summary
 

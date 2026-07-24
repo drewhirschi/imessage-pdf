@@ -45,3 +45,7 @@ next-env.d.ts
 
 # Local reference screenshots (copyright-murky, keep off repo)
 /docs/reference/screenshots/
+
+# Browser-automation debris (Playwright MCP sessions, QA screenshots)
+/.playwright-mcp/
+/*.png

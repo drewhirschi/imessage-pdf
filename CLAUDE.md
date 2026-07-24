@@ -63,15 +63,15 @@ iMessage stores dates as **nanoseconds since 2001-01-01 UTC**. Unix epoch is 197
 
 ## Handles / contacts
 
-Handles in `chat.db` are raw identifiers (phone number or email). Name resolution flows through a JSON contacts book (default `~/.imessage-pdf/contacts.json`), keyed by raw handle with a normalized phone-digits fallback. Server-side resolver lives in `lib/contacts/store.ts`; client-side provider is `components/ContactsProvider.tsx`. Every UI that shows a sender (`ConversationList`, `MessageBubble`, `ReactionDetailsModal`, conversation sidebar) reads through `useContacts().resolve()`. Inline rename uses `InlineNameEditor`; the full editor is at `/contacts`. The plan that drove this is `docs/plans/contacts.md`.
+Handles in `chat.db` are raw identifiers (phone number or email). Name resolution flows through a JSON contacts book (default `~/.imessage-pdf/contacts.json`), keyed by raw handle with a normalized phone-digits fallback. Server-side resolver lives in `lib/contacts/store.ts`; client-side provider is `components/ContactsProvider.tsx`. Every UI that shows a sender (`ConversationList`, `MessageBubble`, `ReactionDetailsModal`, conversation sidebar) reads through `useContacts().resolve()`. Inline rename uses `InlineNameEditor`; the full editor is at `/contacts`. The plan that drove this is `docs/plans/completed/contacts.md`.
 
 ## VCard attachments
 
-`.vcf` (`public.vcard`) and `.loc.vcf` (`public.vlocation`) render via dedicated components (`VCardAttachment`, `LocationAttachment`) instead of the generic 📎 placeholder. Dispatch happens in `MessageBubble.tsx`; **`.loc.vcf` must be checked before `.vcf`** because it also ends in `.vcf`. The parser is hand-rolled in `lib/vcard/parse.ts` (vCard 3.0 subset, enough for Apple's variants). Contact cards offer a "Save to contacts book" shortcut that PATCHes the resolver with `FN` keyed on the primary phone. Plan: `docs/plans/vcard-rendering.md`.
+`.vcf` (`public.vcard`) and `.loc.vcf` (`public.vlocation`) render via dedicated components (`VCardAttachment`, `LocationAttachment`) instead of the generic 📎 placeholder. Dispatch happens in `MessageBubble.tsx`; **`.loc.vcf` must be checked before `.vcf`** because it also ends in `.vcf`. The parser is hand-rolled in `lib/vcard/parse.ts` (vCard 3.0 subset, enough for Apple's variants). Contact cards offer a "Save to contacts book" shortcut that PATCHes the resolver with `FN` keyed on the primary phone. Plan: `docs/plans/completed/vcard-rendering.md`.
 
 ## Conventions
 
-- **Plans live in `docs/plans/`.** Before non-trivial work, write or update a plan there and reach alignment before coding. Plan files are markdown with a short summary, scope, open questions, and a proposed approach.
+- **Plans live in `docs/plans/`.** Before non-trivial work, write or update a plan there and reach alignment before coding. Plan files are markdown with a short summary, scope, open questions, and a proposed approach. Shipped plans move to `docs/plans/completed/` with their status line updated.
 - Prefer editing files over adding new ones.
 - Don't add feature flags or compat shims "just in case" — this is a personal tool.
 - Native-module errors after a fresh install usually mean pnpm skipped a build script. See Running above.
