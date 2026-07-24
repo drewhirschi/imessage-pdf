@@ -68,10 +68,10 @@ On macOS, your iMessage data is typically located at:
 
 ### Built With
 
-- **Next.js 14** - React framework with App Router
+- **Next.js 15** - React framework with App Router
 - **TypeScript** - Type safety
 - **Tailwind CSS** - Styling
-- **better-sqlite3** - SQLite database access
+- **node:sqlite** - built-in SQLite database access (read-only)
 - **pdf-lib** - PDF generation
 - **date-fns** - Date formatting
 

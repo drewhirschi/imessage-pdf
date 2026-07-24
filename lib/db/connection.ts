@@ -39,6 +39,10 @@ function normalizeRow(row: unknown): unknown {
       // Number() on an out-of-safe-range BigInt yields a lossy double,
       // matching better-sqlite3's default read behavior.
       record[key] = Number(record[key]);
+    } else if (record[key] instanceof Uint8Array && !Buffer.isBuffer(record[key])) {
+      // node:sqlite returns BLOBs as Uint8Array; better-sqlite3 returned
+      // Buffer, and JSON payload shapes differ between the two.
+      record[key] = Buffer.from(record[key] as Uint8Array);
     }
   }
   return record;

@@ -50,6 +50,17 @@ describe("connection (node:sqlite adapter)", () => {
     expect(row.date).toBeCloseTo(TS.t4, -6);
   });
 
+  it("returns BLOB columns as Buffer, matching better-sqlite3", () => {
+    const db = getDatabase();
+    const row = db
+      .prepare("SELECT CAST(x'0401AB' AS BLOB) AS blob")
+      .get() as { blob: unknown };
+    // node:sqlite hands back Uint8Array; the adapter must convert to Buffer
+    // so JSON payload shapes ({type:'Buffer',data:[...]}) stay unchanged.
+    expect(Buffer.isBuffer(row.blob)).toBe(true);
+    expect(row.blob).toEqual(Buffer.from([0x04, 0x01, 0xab]));
+  });
+
   it("closeDatabase tears down the singleton", () => {
     expect(isConnected()).toBe(true);
     closeDatabase();
