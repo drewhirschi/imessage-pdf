@@ -49,3 +49,6 @@ next-env.d.ts
 # Browser-automation debris (Playwright MCP sessions, QA screenshots)
 /.playwright-mcp/
 /*.png
+
+# Generated demo backup (scripts/seed-demo-db.ts)
+/.demo/

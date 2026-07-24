@@ -38,8 +38,10 @@ export default function LocationAttachment({
       .catch((err: Error) => setError(err.message));
   }, [attachmentId, dbPath, attachmentsPath]);
 
+  // Standalone card bubble (not nested inside a colored text bubble), so both
+  // sides need solid backgrounds.
   const bodyClass = isFromMe
-    ? 'bg-white bg-opacity-10 border-white border-opacity-20'
+    ? 'bg-[#0b84fe] border-transparent'
     : 'bg-white border-gray-200';
   const textMuted = isFromMe ? 'text-blue-100' : 'text-gray-600';
 

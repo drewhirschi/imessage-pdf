@@ -68,15 +68,24 @@ function wrap(database: DatabaseSync): DbHandle {
 }
 
 let db: DbHandle | null = null;
+let connectedPath: string | null = null;
 
 export function connectToDatabase(dbPath: string): DbHandle {
-  if (db) {
+  // Reuse only when it's the same file; a changed path (user switched
+  // databases) must reconnect, or every query silently reads the old db.
+  if (db && connectedPath === dbPath) {
     return db;
+  }
+  if (db) {
+    db.close();
+    db = null;
+    connectedPath = null;
   }
 
   try {
     const database = new DatabaseSync(dbPath, { readOnly: true });
     db = wrap(database);
+    connectedPath = dbPath;
     return db;
   } catch (error) {
     console.error("Failed to connect to database:", error);
@@ -95,6 +104,7 @@ export function closeDatabase(): void {
   if (db) {
     db.close();
     db = null;
+    connectedPath = null;
   }
 }
 

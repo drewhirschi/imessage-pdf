@@ -34,6 +34,7 @@ interface Attachment {
   ROWID: number;
   filename: string | null;
   mime_type: string | null;
+  transfer_name?: string | null;
 }
 
 interface MessageBubbleProps {
@@ -210,7 +211,12 @@ export default function MessageBubble({
           </div>
         ) : (
           <div className={`message-bubble-item bg-black/10 rounded-[14px] ${tail} p-2 max-w-[280px]`}>
-            <p className="text-[13px] break-all">📎 {attachment.filename || 'Unknown file'}</p>
+            <p className="text-[13px] break-all">
+              📎{' '}
+              {attachment.transfer_name ||
+                attachment.filename?.split('/').pop() ||
+                'Unknown file'}
+            </p>
           </div>
         ),
     });

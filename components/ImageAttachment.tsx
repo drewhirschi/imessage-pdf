@@ -45,13 +45,17 @@ export default function ImageAttachment({
   const isCover = variant === 'cover';
 
   if (imageError) {
+    const basename = filename?.split('/').pop();
     return (
       <div className="bg-gray-100 p-4 text-center h-full flex flex-col items-center justify-center">
         <p className="text-sm text-gray-500">📷 Image not available</p>
-        {filename && <p className="text-xs text-gray-400 mt-1 break-all">{filename}</p>}
+        {basename && (
+          <p className="text-xs text-gray-400 mt-1 break-all">{basename}</p>
+        )}
+        {/* Interactive chrome has no place on paper. */}
         <button
           onClick={handleRetry}
-          className="mt-3 px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          className="mt-3 px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors print:hidden"
         >
           Try Again
         </button>
