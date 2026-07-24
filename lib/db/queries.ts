@@ -1,4 +1,5 @@
 import { getDatabase } from "./connection";
+import { decodeAttributedBody } from "./attributed-body";
 import type {
   Chat,
   Message,
@@ -8,6 +9,7 @@ import type {
   MessageWithAttachments,
   Reaction,
   ReactionType,
+  DatabaseHealth,
 } from "./types";
 
 export function getAllConversations(
@@ -240,6 +242,16 @@ export function getMessagesForConversation(
   }
 
   const messagesWithAttachments = messages.map((msg) => {
+    // Recover text for messages whose plain `text` column is empty but whose
+    // `attributedBody` holds the archived NSAttributedString. This runs
+    // server-side so the web viewer, print route, and PDF all benefit.
+    if ((msg.text === null || msg.text === "") && msg.attributedBody != null) {
+      const recovered = decodeAttributedBody(msg.attributedBody as Buffer);
+      if (recovered) {
+        msg.text = recovered;
+      }
+    }
+
     // Get attachments for this message
     const attachmentsQuery = `
       SELECT a.*
@@ -333,6 +345,173 @@ export function getAttachmentPath(attachmentId: number): string | null {
     | undefined;
 
   return result?.filename || null;
+}
+
+// iMessage epoch (2001-01-01 UTC) offset from the Unix epoch, in seconds.
+const IMESSAGE_EPOCH_OFFSET_SECONDS = 978307200;
+
+/** Strip the macOS Messages prefix so a stored filename can be joined against a
+ * user-supplied attachments directory. Mirrors /api/attachments/[id]. */
+function toRelativeAttachmentPath(filename: string): string {
+  if (filename.startsWith("~/Library/Messages/Attachments/")) {
+    return filename.slice("~/Library/Messages/Attachments/".length);
+  }
+  if (filename.startsWith("/Library/Messages/Attachments/")) {
+    return filename.slice("/Library/Messages/Attachments/".length);
+  }
+  if (filename.startsWith("~/Library/Messages/")) {
+    return filename.slice("~/Library/Messages/".length);
+  }
+  if (filename.startsWith("/Library/Messages/")) {
+    return filename.slice("/Library/Messages/".length);
+  }
+  return filename;
+}
+
+/**
+ * Aggregate database-health diagnostics for the whole DB. The attachment
+ * on-disk check is sampled (random subset, stat'd in batches) so it stays cheap
+ * even on backups with 100k+ attachments.
+ */
+export async function getDatabaseHealth(options?: {
+  attachmentsPath?: string;
+  sampleSize?: number;
+}): Promise<DatabaseHealth> {
+  const db = getDatabase();
+  const sampleSize = options?.sampleSize ?? 500;
+
+  const displayableFilter =
+    "(associated_message_type IS NULL OR associated_message_type < 2000 OR associated_message_type > 3005)";
+
+  const totalMessages = (
+    db.prepare("SELECT COUNT(*) as c FROM message").get() as { c: number }
+  ).c;
+
+  const displayableMessages = (
+    db
+      .prepare(`SELECT COUNT(*) as c FROM message WHERE ${displayableFilter}`)
+      .get() as { c: number }
+  ).c;
+
+  // Text recoverability buckets, scoped to displayable messages so reactions and
+  // stickers (which legitimately carry no text) don't inflate the empty counts.
+  const withText = (
+    db
+      .prepare(
+        `SELECT COUNT(*) as c FROM message WHERE ${displayableFilter} AND text IS NOT NULL AND text != ''`
+      )
+      .get() as { c: number }
+  ).c;
+  const recoverableText = (
+    db
+      .prepare(
+        `SELECT COUNT(*) as c FROM message WHERE ${displayableFilter} AND (text IS NULL OR text = '') AND attributedBody IS NOT NULL`
+      )
+      .get() as { c: number }
+  ).c;
+  const trueEmpty = (
+    db
+      .prepare(
+        `SELECT COUNT(*) as c FROM message WHERE ${displayableFilter} AND (text IS NULL OR text = '') AND attributedBody IS NULL`
+      )
+      .get() as { c: number }
+  ).c;
+
+  // Per-year histogram of displayable messages.
+  const yearRows = db
+    .prepare(
+      `SELECT CAST(strftime('%Y', (date / 1000000000) + ${IMESSAGE_EPOCH_OFFSET_SECONDS}, 'unixepoch') AS INTEGER) as year,
+              COUNT(*) as count
+       FROM message
+       WHERE ${displayableFilter} AND date > 0
+       GROUP BY year
+       ORDER BY year ASC`
+    )
+    .all() as Array<{ year: number | null; count: number }>;
+  const messagesByYear = yearRows
+    .filter((r) => r.year != null)
+    .map((r) => ({ year: r.year as number, count: r.count }));
+
+  // Attachment stats.
+  const attachmentsTotal = (
+    db.prepare("SELECT COUNT(*) as c FROM attachment").get() as { c: number }
+  ).c;
+  const attachmentsWithFilename = (
+    db
+      .prepare("SELECT COUNT(*) as c FROM attachment WHERE filename IS NOT NULL")
+      .get() as { c: number }
+  ).c;
+  const byTransferState = db
+    .prepare(
+      "SELECT transfer_state as state, COUNT(*) as count FROM attachment GROUP BY transfer_state ORDER BY count DESC"
+    )
+    .all() as Array<{ state: number; count: number }>;
+  const byCkSyncState = db
+    .prepare(
+      "SELECT ck_sync_state as state, COUNT(*) as count FROM attachment GROUP BY ck_sync_state ORDER BY count DESC"
+    )
+    .all() as Array<{ state: number; count: number }>;
+
+  // Sampled on-disk presence check.
+  let onDisk: DatabaseHealth["attachments"]["onDisk"] = null;
+  if (options?.attachmentsPath && attachmentsWithFilename > 0) {
+    const { promises: fs } = await import("fs");
+    const path = await import("path");
+    const sample = db
+      .prepare(
+        "SELECT filename FROM attachment WHERE filename IS NOT NULL ORDER BY RANDOM() LIMIT ?"
+      )
+      .all(sampleSize) as Array<{ filename: string }>;
+
+    let present = 0;
+    let missing = 0;
+    const BATCH = 200;
+    for (let i = 0; i < sample.length; i += BATCH) {
+      const batch = sample.slice(i, i + BATCH);
+      const results = await Promise.all(
+        batch.map(async (row) => {
+          const rel = toRelativeAttachmentPath(row.filename);
+          const full = path.join(options.attachmentsPath as string, rel);
+          try {
+            await fs.access(full);
+            return true;
+          } catch {
+            return false;
+          }
+        })
+      );
+      for (const ok of results) {
+        if (ok) present++;
+        else missing++;
+      }
+    }
+    const sampled = present + missing;
+    const presentRate = sampled > 0 ? present / sampled : 0;
+    onDisk = {
+      sampled,
+      present,
+      missing,
+      presentRate,
+      estimatedPresent: Math.round(attachmentsWithFilename * presentRate),
+      estimatedMissing: Math.round(attachmentsWithFilename * (1 - presentRate)),
+    };
+  }
+
+  return {
+    totalMessages,
+    displayableMessages,
+    withText,
+    recoverableText,
+    trueEmpty,
+    messagesByYear,
+    attachments: {
+      total: attachmentsTotal,
+      withFilename: attachmentsWithFilename,
+      byTransferState,
+      byCkSyncState,
+      onDisk,
+    },
+  };
 }
 
 // Helper function to map associated_message_type to reaction type
