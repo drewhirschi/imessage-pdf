@@ -74,9 +74,11 @@ export default function LinkCard({
           )}
         </div>
         {forPrint && (
-          <div className="flex-shrink-0 self-center bg-white p-1 rounded-md">
-            <QRCodeSVG value={url} size={64} />
-          </div>
+          <QRCodeSVG
+            value={url}
+            size={64}
+            wrapperClassName="flex-shrink-0 self-center bg-white p-1 rounded-md"
+          />
         )}
       </div>
     </a>

@@ -4,6 +4,10 @@ interface QRCodeProps {
   value: string;
   /** Rendered pixel size (square). */
   size?: number;
+  /** Optional wrapper class; the wrapper is skipped entirely when the value
+   * can't be encoded (e.g. URLs past QR capacity, ~3KB), so callers never
+   * show an empty frame. */
+  wrapperClassName?: string;
 }
 
 /**
@@ -16,7 +20,7 @@ interface QRCodeProps {
  * it can never be missed by the print-ready gate. It's also vector-crisp on the
  * page. Used only in the PDF/print output; the web view keeps clickable links.
  */
-export default function QRCodeSVG({ value, size = 72 }: QRCodeProps) {
+export default function QRCodeSVG({ value, size = 72, wrapperClassName }: QRCodeProps) {
   let matrix: { size: number; data: Uint8Array };
   try {
     matrix = QRCode.create(value, { errorCorrectionLevel: 'M' }).modules;
@@ -35,7 +39,7 @@ export default function QRCodeSVG({ value, size = 72 }: QRCodeProps) {
     }
   }
 
-  return (
+  const svg = (
     <svg
       width={size}
       height={size}
@@ -49,4 +53,6 @@ export default function QRCodeSVG({ value, size = 72 }: QRCodeProps) {
       <path d={rects.join('')} fill="#000000" />
     </svg>
   );
+
+  return wrapperClassName ? <div className={wrapperClassName}>{svg}</div> : svg;
 }

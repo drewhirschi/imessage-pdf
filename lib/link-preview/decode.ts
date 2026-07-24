@@ -60,6 +60,21 @@ export function parseBinaryPlist(buf: Buffer): PlistValue {
   const topObject = Number(trailer.readBigUInt64BE(16));
   const offsetTableOffset = Number(trailer.readBigUInt64BE(24));
 
+  // All counts/sizes come from the untrusted blob. Bound every one against the
+  // buffer before allocating or looping — a corrupt count field can otherwise
+  // drive multi-GB allocations / seconds of CPU (a valid blob's counts can
+  // never exceed its own byte length, so these checks are lossless).
+  if (offsetSize < 1 || offsetSize > 8) throw new Error("bad offsetSize");
+  if (objectRefSize < 1 || objectRefSize > 8) throw new Error("bad objectRefSize");
+  if (
+    numObjects < 0 ||
+    offsetTableOffset < 8 ||
+    offsetTableOffset + numObjects * offsetSize > buf.length
+  ) {
+    throw new Error("offset table out of range");
+  }
+  if (topObject >= numObjects) throw new Error("top object out of range");
+
   const offsets: number[] = [];
   for (let i = 0; i < numObjects; i++) {
     offsets.push(readUInt(buf, offsetTableOffset + i * offsetSize, offsetSize));
@@ -76,7 +91,14 @@ export function parseBinaryPlist(buf: Buffer): PlistValue {
     return [count, off + 2 + intLen];
   }
 
+  function ensure(dataOff: number, byteLen: number): void {
+    if (byteLen < 0 || dataOff + byteLen > buf.length) {
+      throw new Error("object data out of range");
+    }
+  }
+
   function parse(index: number): PlistValue {
+    if (index >= numObjects) throw new Error("object ref out of range");
     if (cache.has(index)) return cache.get(index)!;
     const off = offsets[index];
     const marker = buf.readUInt8(off);
@@ -104,18 +126,21 @@ export function parseBinaryPlist(buf: Buffer): PlistValue {
       case 0x4: {
         // data
         const [len, dataOff] = readLength(off, objInfo);
+        ensure(dataOff, len);
         result = buf.subarray(dataOff, dataOff + len);
         break;
       }
       case 0x5: {
         // ASCII string
         const [len, dataOff] = readLength(off, objInfo);
+        ensure(dataOff, len);
         result = buf.toString("latin1", dataOff, dataOff + len);
         break;
       }
       case 0x6: {
         // UTF-16BE string (length is in code units)
         const [len, dataOff] = readLength(off, objInfo);
+        ensure(dataOff, len * 2);
         const slice = Buffer.from(buf.subarray(dataOff, dataOff + len * 2));
         slice.swap16(); // BE -> LE for Node's utf16le decoder
         result = slice.toString("utf16le");
@@ -131,6 +156,7 @@ export function parseBinaryPlist(buf: Buffer): PlistValue {
       case 0xc: {
         // array / set
         const [count, dataOff] = readLength(off, objInfo);
+        ensure(dataOff, count * objectRefSize);
         const arr: PlistValue[] = [];
         cache.set(index, arr);
         for (let i = 0; i < count; i++) {
@@ -141,6 +167,7 @@ export function parseBinaryPlist(buf: Buffer): PlistValue {
       case 0xd: {
         // dict
         const [count, dataOff] = readLength(off, objInfo);
+        ensure(dataOff, count * 2 * objectRefSize);
         const dict: { [key: string]: PlistValue } = {};
         cache.set(index, dict);
         for (let i = 0; i < count; i++) {
