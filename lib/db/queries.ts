@@ -7,6 +7,7 @@ import type {
   ConversationSummary,
   MessageWithAttachments,
   Reaction,
+  ReactionType,
 } from "./types";
 
 export function getAllConversations(
@@ -222,7 +223,7 @@ export function getMessagesForConversation(
       sender_id: reactionRow.sender_id,
       reaction_type: getReactionTypeFromCode(
         reactionRow.associated_message_type
-      ) as any,
+      ),
     };
 
     // The associated_message_guid may have a prefix like "p:0/" or "bp:"
@@ -335,8 +336,8 @@ export function getAttachmentPath(attachmentId: number): string | null {
 }
 
 // Helper function to map associated_message_type to reaction type
-function getReactionTypeFromCode(code: number): string {
-  const reactionMap: Record<number, string> = {
+function getReactionTypeFromCode(code: number): ReactionType {
+  const reactionMap: Record<number, ReactionType> = {
     2000: "heart",
     2001: "thumbs_up",
     2002: "thumbs_down",

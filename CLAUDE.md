@@ -8,9 +8,11 @@ Next.js 15 (App Router, Turbopack) app for browsing a local iMessage `chat.db` a
 
 ## Running
 
+- **Node: >=24 recommended** (`engines` + `.nvmrc` pin 24). The DB layer uses Node's built-in `node:sqlite`, which is **stable in Node 24**. On **Node 22.5+** it lives behind `--experimental-sqlite`, so the `dev`/`build`/`start`/`test` scripts prepend `NODE_OPTIONS=--experimental-sqlite`. That flag is a harmless no-op on Node 24, so the scripts work on both — but the flag prefix is **temporary**; once everyone is on Node 24 it can be dropped. `pnpm install` does not hard-fail on Node 22 (pnpm only warns on `engines` unless `engine-strict` is set).
 - Package manager: **pnpm** (v10+). `pnpm install` and `pnpm dev`.
-- Native modules `better-sqlite3`, `sharp`, and `unrs-resolver` must be in `pnpm.onlyBuiltDependencies` in `package.json` or pnpm v10 silently skips their build scripts. If you see `Could not locate the bindings file. Tried: ...better_sqlite3.node`, run `pnpm rebuild better-sqlite3 sharp`.
+- No more `better-sqlite3` — there is no native SQLite module to rebuild. The remaining native modules `sharp` and `unrs-resolver` must be in `pnpm.onlyBuiltDependencies` in `package.json` or pnpm v10 silently skips their build scripts.
 - Dev server: `pnpm dev` → http://localhost:3000.
+- Tests: `pnpm test` (Vitest). Suites live next to their code (`lib/db/*.test.ts`, `lib/utils/timestamp.test.ts`). The DB tests build a temp fixture `chat.db` with the iMessage schema subset via `test/fixture.ts` — they are self-contained and never touch the real backup. `pnpm test` also carries `NODE_OPTIONS=--experimental-sqlite` for Node 22.
 
 ## Working copy of real data
 
@@ -37,7 +39,7 @@ To inspect the DB directly: `sqlite3 -readonly /home/drew/work/hannah-imessage/c
 
 ### Data layer (`lib/db/`)
 
-- `connection.ts` — lazy singleton `better-sqlite3` connection, opened read-only.
+- `connection.ts` — lazy singleton `node:sqlite` (`DatabaseSync`) connection, opened read-only. A thin adapter exposes a better-sqlite3-shaped `prepare().get()/.all()/.run()` API so `queries.ts` and the routes are unchanged. It enables `setReadBigInts(true)` and coerces the returned BigInts back to `Number` at the boundary, because `node:sqlite` otherwise **throws `ERR_OUT_OF_RANGE`** on iMessage's out-of-safe-range nanosecond dates; the Number coercion reproduces better-sqlite3's default (lossy) read behavior exactly.
 - `queries.ts` — all SQL lives here. Key functions: `getAllConversations`, `getMessagesForConversation`, `getConversationDetails`, `getAttachmentPath`. Reactions are pulled in the same query and grouped by message GUID; reaction type codes **2000–2005** map to `heart | thumbs_up | thumbs_down | laugh | emphasize | question`.
 - `types.ts` — `Chat`, `Message`, `Handle`, `Attachment` (raw schema); `ConversationSummary`, `MessageWithAttachments`, `Reaction` (view models).
 
