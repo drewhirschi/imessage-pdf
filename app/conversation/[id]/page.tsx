@@ -272,22 +272,38 @@ function ConversationPageInner() {
         endImessageTimestamp = unixToImessageTimestamp(unixTimestamp);
       }
 
+      const requestBody = {
+        chatId: parseInt(chatId),
+        dbPath,
+        attachmentsPath,
+        contactsPath,
+        startDate: startImessageTimestamp,
+        endDate: endImessageTimestamp,
+        pageSize: opts.pageSize,
+        customWidthIn: opts.customWidthIn,
+        customHeightIn: opts.customHeightIn,
+        marginIn: opts.marginIn,
+        columnWidthPx: opts.columnWidthPx,
+      };
+
+      // In the packaged Electron app, render + save natively (printToPDF +
+      // OS save dialog) instead of streaming a blob download. The puppeteer
+      // HTTP route stays the fallback for the browser dev flow.
+      const bridge = (window as unknown as { electron?: { exportPDF?: (b: unknown) => Promise<{ filePath?: string; canceled?: boolean; error?: string }> } }).electron;
+      if (bridge?.exportPDF) {
+        const result = await bridge.exportPDF(requestBody);
+        if (result?.error) {
+          throw new Error(result.error);
+        }
+        // result.canceled → user dismissed the save dialog; treat as a no-op.
+        setPdfDialogOpen(false);
+        return;
+      }
+
       const response = await fetch('/api/generate-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chatId: parseInt(chatId),
-          dbPath,
-          attachmentsPath,
-          contactsPath,
-          startDate: startImessageTimestamp,
-          endDate: endImessageTimestamp,
-          pageSize: opts.pageSize,
-          customWidthIn: opts.customWidthIn,
-          customHeightIn: opts.customHeightIn,
-          marginIn: opts.marginIn,
-          columnWidthPx: opts.columnWidthPx,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {

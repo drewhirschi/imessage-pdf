@@ -71,6 +71,19 @@ Handles in `chat.db` are raw identifiers (phone number or email). Name resolutio
 
 `.vcf` (`public.vcard`) and `.loc.vcf` (`public.vlocation`) render via dedicated components (`VCardAttachment`, `LocationAttachment`) instead of the generic 📎 placeholder. Dispatch happens in `MessageBubble.tsx`; **`.loc.vcf` must be checked before `.vcf`** because it also ends in `.vcf`. The parser is hand-rolled in `lib/vcard/parse.ts` (vCard 3.0 subset, enough for Apple's variants). Contact cards offer a "Save to contacts book" shortcut that PATCHes the resolver with `FN` keyed on the primary phone. Plan: `docs/plans/completed/vcard-rendering.md`.
 
+## Electron app
+
+The app is packaged as a desktop app (`electron/`). **Additive — `pnpm dev` and the whole browser flow are unchanged.** Plan: `docs/plans/completed/electron-app.md`.
+
+- **Architecture: the Next server runs as a CHILD PROCESS, not in Electron's main process.** `electron/serverManager.js` spawns the `output: 'standalone'` server (`.next/standalone/server.js`) under a *real* Node runtime and waits for it to answer, then `electron/main.js` opens a `BrowserWindow` at `http://127.0.0.1:<port>`. This is deliberate: native modules (`sharp`, `node:sqlite`) are compiled for the system Node ABI by `pnpm install`, so keeping the server out of Electron's process means **no `electron-rebuild`** on Electron upgrades.
+- **Node binary resolution** (`resolveNodeBinary`): `IMESSAGE_PDF_NODE` env → bundled `resources/node` (packaged) → `process.execPath` when not inside Electron → `node` on PATH → last-resort `ELECTRON_RUN_AS_NODE` (ABI-unsafe for sharp; only if no real Node exists). **macOS packaging must bundle a Node binary** in `extraResources` (see the commented block in `electron-builder.yml`) or rely on the user having Node.
+- **`output: 'standalone'`** is set in `next.config.js`. After `next build`, `electron/prepareStandalone.js` copies `.next/static` and `public` into `.next/standalone/` (Next doesn't do this automatically). The `electron:prepare` script chains build + this copy.
+- **PDF export in Electron**: `ipcMain.handle('export-pdf')` loads the existing `/conversation/[id]/print` route in a hidden `BrowserWindow`, runs the same readiness protocol as the puppeteer route (`data-print-ready`, scroll to trigger lazy media, wait for `<img>`s), then `webContents.printToPDF()` + a native save dialog. The puppeteer path in `app/api/generate-pdf/route.ts` **stays** as the browser-dev fallback; the client (`app/conversation/[id]/page.tsx`) uses `window.electron.exportPDF` when present and falls back to the HTTP route otherwise.
+- **Preload bridge** (`electron/preload.js`, contextIsolation on / nodeIntegration off): exposes exactly `openExternal`, `relaunch`, `exportPDF`, and an `isElectron` marker — matching what `components/FullDiskAccessScreen.tsx` probes. Nothing else.
+- **Pure, unit-tested helpers** live in `electron/lib/` (`printOptions.js`: PDFOptions→printToPDF mapping + print-URL builder; `port.js`: port parsing + free-port selection). Tests: `test/electron/*.test.ts`.
+- **Scripts**: `electron:prepare` (build + copy), `electron:dev` (prepare + launch), `electron:build` (electron-builder), `electron:build:linux` / `electron:build:mac`. Config: `electron-builder.yml` (mac dmg arm64+x64 primary; linux dir/AppImage for verification). Build output `dist-electron/` is gitignored.
+- **Headless Linux launch**: the GPU stack segfaults under the headless ozone platform; use `--ozone-platform=wayland --disable-gpu` (or run on a real display) to smoke-test. `ELECTRON_SMOKE=1` makes the app load the home page, log the title, and quit.
+
 ## Conventions
 
 - **Plans live in `docs/plans/`.** Before non-trivial work, write or update a plan there and reach alignment before coding. Plan files are markdown with a short summary, scope, open questions, and a proposed approach. Shipped plans move to `docs/plans/completed/` with their status line updated.

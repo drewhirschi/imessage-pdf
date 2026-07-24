@@ -2,12 +2,19 @@
   "name": "imessage-pdf",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "NODE_OPTIONS=--experimental-sqlite next dev --turbopack",
     "build": "NODE_OPTIONS=--experimental-sqlite next build --turbopack",
     "start": "NODE_OPTIONS=--experimental-sqlite next start",
     "lint": "eslint",
-    "test": "NODE_OPTIONS=--experimental-sqlite vitest run"
+    "test": "NODE_OPTIONS=--experimental-sqlite vitest run",
+    "electron:prepare": "NODE_OPTIONS=--experimental-sqlite next build --turbopack && node electron/prepareStandalone.js",
+    "electron:start": "electron .",
+    "electron:dev": "pnpm run electron:prepare && electron .",
+    "electron:build": "pnpm run electron:prepare && electron-builder",
+    "electron:build:linux": "pnpm run electron:prepare && electron-builder --linux dir",
+    "electron:build:mac": "pnpm run electron:prepare && electron-builder --mac dmg"
   },
   "engines": {
     "node": ">=24"
@@ -46,6 +53,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/react-infinite-scroll-component": "^4.2.5",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
     "eslint": "^9",
     "eslint-config-next": "15.5.21",
     "tailwindcss": "^3.4.18",
@@ -55,7 +64,9 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "sharp",
-      "unrs-resolver"
+      "unrs-resolver",
+      "electron",
+      "esbuild"
     ]
   }
 }

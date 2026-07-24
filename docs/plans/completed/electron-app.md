@@ -1,5 +1,32 @@
 # Plan: Package as an Electron App
 
+**Status:** shipped (Linux verified; macOS dmg + FDA + printToPDF still need a
+mac to verify). Implemented in `electron/`, `electron-builder.yml`, and the
+`electron:*` package scripts.
+
+## Resolutions (post-implementation)
+
+- **Open question 1 (in-process vs child process): CHILD PROCESS.** The Next
+  standalone server is spawned by `electron/serverManager.js` under a *real*
+  Node runtime (system `node`, or a Node binary bundled in resources), never in
+  the Electron main process. Native modules (`sharp`, `node:sqlite`) are built
+  against the system Node ABI by `pnpm install`; running the server out of
+  process means Electron upgrades never require `electron-rebuild`. Verified on
+  Linux: the packaged binary spawns `resources/app/.next/standalone/server.js`
+  via `/usr/bin/node` and the renderer loads the home page.
+- **Open question 2 (browser dev flow):** kept first-class. `pnpm dev` is
+  unchanged; Electron is purely additive. The PDF client falls back to the
+  puppeteer HTTP route whenever `window.electron.exportPDF` is absent.
+- **PDF export:** in Electron, a hidden `BrowserWindow` loads the existing
+  `/conversation/[id]/print` route and calls `webContents.printToPDF()` with a
+  native save dialog (`electron/main.js`). The puppeteer path in
+  `app/api/generate-pdf/route.ts` is retained as the non-Electron fallback.
+- **Preload surface (`electron/preload.js`):** contextIsolation on,
+  nodeIntegration off. Exposes exactly `openExternal`, `relaunch`, `exportPDF`,
+  and an `isElectron` marker — matching what `FullDiskAccessScreen` probes.
+
+## Original plan
+
 **Status:** draft — needs review
 
 ## Summary

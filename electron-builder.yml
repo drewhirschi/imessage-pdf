@@ -1,0 +1,65 @@
+# electron-builder configuration.
+#
+# Packages the Electron shell + the Next.js standalone build into a distributable.
+# Run `pnpm run electron:prepare` first (next build + prepareStandalone copies
+# static/public into .next/standalone) — the scripts do this for you.
+#
+# The primary target is a macOS .dmg (that is where chat.db lives). A Linux
+# dir/AppImage target is configured too, purely so the shell can be built and
+# smoke-tested on non-mac CI / dev machines.
+appId: com.imessagepdf.exporter
+productName: iMessage PDF Exporter
+copyright: Copyright © 2026
+
+directories:
+  output: dist-electron
+  buildResources: build
+
+# App bundle contents: the Electron entry code + minimal metadata. The heavy
+# Next server lives in extraResources so it lands at <resources>/app/... which
+# electron/main.js resolves when app.isPackaged.
+files:
+  - electron/**/*
+  - package.json
+
+extraResources:
+  # The whole standalone server tree (includes its own node_modules with sharp,
+  # plus the .next/static and public copied in by prepareStandalone.js).
+  - from: .next/standalone
+    to: app/.next/standalone
+    filter:
+      - "**/*"
+  # NOTE (macOS packaging): to run the server child process without requiring a
+  # system Node install, bundle a Node binary here so resolveNodeBinary() finds
+  # <resources>/node:
+  #   - from: <path-to-mac-node-binary>
+  #     to: node
+  # On Linux dev machines the system `node` on PATH is used instead, so this is
+  # left commented for now.
+
+# --- macOS (primary) ---
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  # Full Disk Access + reading ~/Library/Messages needs the hardened runtime off
+  # OR the right entitlements; unsigned ad-hoc build for v1 (users right-click →
+  # Open). Signing/notarization is a later, account-gated step.
+  hardenedRuntime: false
+  gatekeeperAssess: false
+
+dmg:
+  title: ${productName}
+
+# --- Linux (verification only) ---
+linux:
+  category: Utility
+  target:
+    - dir
+    - AppImage
+
+# No auto-update, no publish provider in v1.
+publish: null
