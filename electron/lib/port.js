@@ -47,13 +47,16 @@ function getFreePort(host = '127.0.0.1') {
 
 /**
  * Resolve the port to run the embedded server on: an explicit, valid
- * `PORT`/`IMESSAGE_PDF_PORT` env wins; otherwise pick a free one.
+ * `IMESSAGE_PDF_PORT` env wins; otherwise pick a free one. A generic `PORT`
+ * env is deliberately ignored — a stray exported PORT pointing at an
+ * already-running dev server would make the window silently drive the wrong
+ * server instance.
  *
  * @param {NodeJS.ProcessEnv} [env=process.env]
  * @returns {Promise<number>}
  */
 async function resolveServerPort(env = process.env) {
-  const explicit = parsePort(env.IMESSAGE_PDF_PORT ?? env.PORT, null);
+  const explicit = parsePort(env.IMESSAGE_PDF_PORT, null);
   if (explicit && explicit > 0) return explicit;
   return getFreePort();
 }

@@ -14,9 +14,9 @@
 //   1. IMESSAGE_PDF_NODE env override (used by electron:dev and tests)
 //   2. a bundled Node binary shipped in resources/ (packaged app)
 //   3. the `node` on PATH (developer machines)
-// If none is a real Node binary we fall back to running the Electron binary
-// with ELECTRON_RUN_AS_NODE=1 — this WILL require sharp to match Electron's ABI,
-// so it is a last resort and logged loudly.
+// If none is a real Node binary we fail fast with an actionable error —
+// ELECTRON_RUN_AS_NODE cannot work (Electron's embedded Node has no
+// node:sqlite and rejects --experimental-sqlite).
 
 const { spawn } = require('node:child_process');
 const http = require('node:http');
@@ -37,11 +37,11 @@ function fileExists(p) {
  * Locate a real Node executable to run the standalone server with.
  * @param {object} [opts]
  * @param {string} [opts.resourcesPath] Electron process.resourcesPath (packaged)
- * @returns {{ command: string, useElectronNode: boolean }}
+ * @returns {{ command: string }}
  */
 function resolveNodeBinary(opts = {}) {
   const override = process.env.IMESSAGE_PDF_NODE;
-  if (fileExists(override)) return { command: override, useElectronNode: false };
+  if (fileExists(override)) return { command: override };
 
   // Packaged: a Node binary bundled via electron-builder extraResources.
   if (opts.resourcesPath) {
@@ -49,29 +49,32 @@ function resolveNodeBinary(opts = {}) {
       opts.resourcesPath,
       'node' + (process.platform === 'win32' ? '.exe' : ''),
     );
-    if (fileExists(bundled)) return { command: bundled, useElectronNode: false };
+    if (fileExists(bundled)) return { command: bundled };
   }
 
   // Developer machine: whatever `node` resolves to. `execPath` is only Node
   // when we are NOT inside Electron (i.e. electron:dev spawned via node).
   if (!process.versions.electron && fileExists(process.execPath)) {
-    return { command: process.execPath, useElectronNode: false };
+    return { command: process.execPath };
   }
 
   // System `node` on PATH. Real Node runtime → ABI-safe for sharp/node:sqlite.
   const onPath = process.platform === 'win32' ? 'node.exe' : 'node';
   if (hasNodeOnPath(onPath)) {
-    return { command: onPath, useElectronNode: false };
+    return { command: onPath };
   }
 
-  // Absolute last resort: re-exec the Electron binary as Node. Boots the
-  // server even with no Node installed, but native modules (sharp) must match
-  // Electron's ABI. Only reached inside a packaged app that shipped no Node.
-  return { command: process.execPath, useElectronNode: true };
+  // No usable Node runtime. ELECTRON_RUN_AS_NODE is NOT a viable fallback:
+  // Electron's embedded Node predates node:sqlite and rejects the
+  // --experimental-sqlite flag outright (verified on Electron 33 / Node 20).
+  // Fail fast with an actionable message instead of a doomed spawn.
+  throw new Error(
+    'No Node.js runtime found. Install Node 24+ (https://nodejs.org) or ship ' +
+      'a bundled runtime via electron-builder extraResources (resources/node).',
+  );
 }
 
-// Cheap PATH probe so we can prefer a real Node before falling back to
-// ELECTRON_RUN_AS_NODE. Avoids spawning; just walks PATH entries.
+// Cheap PATH probe. Avoids spawning; just walks PATH entries.
 function hasNodeOnPath(binName) {
   const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
   for (const dir of dirs) {
@@ -117,7 +120,7 @@ async function startServer(opts) {
 
   const port = await resolveServerPort();
   const host = '127.0.0.1';
-  const { command, useElectronNode } = resolveNodeBinary({ resourcesPath });
+  const { command } = resolveNodeBinary({ resourcesPath });
 
   const env = {
     ...process.env,
@@ -128,15 +131,6 @@ async function startServer(opts) {
       .filter(Boolean)
       .join(' '),
   };
-  if (useElectronNode) {
-    env.ELECTRON_RUN_AS_NODE = '1';
-    onLog(
-      '[server] WARNING: no standalone Node binary found; running the server ' +
-        'under Electron (ELECTRON_RUN_AS_NODE). Native modules (sharp) must ' +
-        'match Electron\'s ABI or attachment conversion will fail.',
-    );
-  }
-
   onLog(`[server] spawning ${command} ${serverEntry} on ${host}:${port}`);
   const child = spawn(command, [serverEntry], { cwd, env, stdio: 'pipe' });
 

@@ -36,8 +36,12 @@ describe('resolveServerPort', () => {
     expect(await resolveServerPort({ IMESSAGE_PDF_PORT: '4321' })).toBe(4321);
   });
 
-  it('honors PORT when IMESSAGE_PDF_PORT is absent', async () => {
-    expect(await resolveServerPort({ PORT: '5555' })).toBe(5555);
+  it('ignores a generic PORT env (only IMESSAGE_PDF_PORT is honored)', async () => {
+    // A stray exported PORT matching a running dev server would make the
+    // window drive the wrong server instance; review L1.
+    const port = await resolveServerPort({ PORT: '5555' });
+    expect(port).not.toBe(5555);
+    expect(port).toBeGreaterThan(0);
   });
 
   it('picks a free port when no valid env is set', async () => {

@@ -21,6 +21,11 @@ directories:
 files:
   - electron/**/*
   - package.json
+  # electron-builder auto-includes production dependencies, but electron/*.js
+  # only uses builtins + the electron runtime; the server has its own
+  # node_modules inside the standalone tree. Excluding this cuts the package
+  # size by roughly two-thirds (~590 MB of duplicated deps).
+  - "!node_modules"
 
 extraResources:
   # The whole standalone server tree (includes its own node_modules with sharp,

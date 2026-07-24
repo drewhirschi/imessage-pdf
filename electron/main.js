@@ -63,6 +63,10 @@ function createWindow(url) {
     },
   });
 
+  // Containment: message links must open in the system browser, never as a
+  // new window (or navigation) inside the app hosting remote content.
+  attachNavigationGuards(mainWindow, url);
+
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.loadURL(url);
 
@@ -96,15 +100,40 @@ function createWindow(url) {
   return mainWindow;
 }
 
+// Schemes the renderer may hand to the OS: web links plus the macOS
+// System Settings deep link the Full Disk Access screen uses.
+const EXTERNAL_URL_ALLOWED = /^(https?:|x-apple\.systempreferences:)/i;
+
+function attachNavigationGuards(win, appOrigin) {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (EXTERNAL_URL_ALLOWED.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith(appOrigin)) {
+      event.preventDefault();
+      if (EXTERNAL_URL_ALLOWED.test(url)) shell.openExternal(url);
+    }
+  });
+}
+
 // --- IPC: minimal surface -------------------------------------------------
 
 ipcMain.handle('open-external', async (_event, url) => {
-  if (typeof url !== 'string') return { ok: false };
+  if (typeof url !== 'string' || !EXTERNAL_URL_ALLOWED.test(url)) {
+    return { ok: false };
+  }
   await shell.openExternal(url);
   return { ok: true };
 });
 
 ipcMain.handle('relaunch', async () => {
+  // app.exit() skips before-quit, so stop the server child explicitly or
+  // every FDA grant-and-relaunch leaks a running Next server.
+  if (serverHandle) {
+    serverHandle.stop();
+    serverHandle = null;
+  }
   app.relaunch();
   app.exit(0);
 });
@@ -113,11 +142,12 @@ ipcMain.handle('export-pdf', async (_event, body) => {
   if (!serverHandle) {
     return { error: 'Server not ready' };
   }
-  if (!body || body.chatId == null) {
+  const chatId = Number(body?.chatId);
+  if (!Number.isFinite(chatId)) {
     return { error: 'chatId required' };
   }
 
-  const printUrl = buildPrintUrl(serverHandle.url, body);
+  const printUrl = buildPrintUrl(serverHandle.url, { ...body, chatId });
 
   // Hidden window that loads the same print route puppeteer used.
   const printWin = new BrowserWindow({
@@ -132,6 +162,7 @@ ipcMain.handle('export-pdf', async (_event, body) => {
       javascript: true,
     },
   });
+  attachNavigationGuards(printWin, serverHandle.url);
 
   try {
     await printWin.loadURL(printUrl);
