@@ -6,7 +6,12 @@ import {
   getConversationDetails,
   getAttachmentPath,
 } from "./queries";
-import { createFixtureDb, TS, type Fixture } from "../../test/fixture";
+import {
+  createFixtureDb,
+  TS,
+  ATTR_BODY_CHAT,
+  type Fixture,
+} from "../../test/fixture";
 
 let fixture: Fixture;
 
@@ -207,5 +212,60 @@ describe("getAttachmentPath", () => {
 
   it("returns null for a missing attachment", () => {
     expect(getAttachmentPath(999)).toBeNull();
+  });
+});
+
+describe("attributedBody recovery + reaction/sticker filtering (chat 4)", () => {
+  const { chatId, anchorGuid, recoveredRowIds } = ATTR_BODY_CHAT;
+
+  it("recovers text from attributedBody when the text column is empty", () => {
+    const { messages } = getMessagesForConversation(chatId);
+    const byRow = new Map(messages.map((m) => [m.message.ROWID, m]));
+    expect(byRow.get(recoveredRowIds.simple)!.message.text).toBe(
+      "What are you up to? "
+    );
+    expect(byRow.get(recoveredRowIds.mutable)!.message.text).toBe(
+      "Did you just get there? "
+    );
+  });
+
+  it("leaves attachment-placeholder attributedBody (empty backing string) blank", () => {
+    const { messages } = getMessagesForConversation(chatId);
+    const empty = messages.find(
+      (m) => m.message.ROWID === recoveredRowIds.emptyBlob
+    )!;
+    expect(empty.message.text ?? "").toBe("");
+  });
+
+  it("excludes reactions (2000-2005) and the sticker/edit band (2006-3005)", () => {
+    const { messages, total } = getMessagesForConversation(chatId);
+    // 4 real messages: anchor + 3 attributedBody rows. Reactions 60-65 and
+    // sticker 70 are filtered out.
+    expect(total).toBe(4);
+    const rowids = messages.map((m) => m.message.ROWID).sort((a, b) => a - b);
+    expect(rowids).toEqual([50, 51, 52, 53]);
+    expect(
+      messages.some((m) => m.message.text === "sticker-should-be-hidden")
+    ).toBe(false);
+  });
+
+  it("groups all six reaction types (2000-2005) onto the anchor message", () => {
+    const { messages } = getMessagesForConversation(chatId);
+    const anchor = messages.find((m) => m.message.guid === anchorGuid)!;
+    const types = (anchor.reactions ?? [])
+      .map((r) => r.associated_message_type)
+      .sort();
+    expect(types).toEqual([2000, 2001, 2002, 2003, 2004, 2005]);
+    const kinds = (anchor.reactions ?? [])
+      .map((r) => r.reaction_type)
+      .sort();
+    expect(kinds).toEqual([
+      "emphasize",
+      "heart",
+      "laugh",
+      "question",
+      "thumbs_down",
+      "thumbs_up",
+    ]);
   });
 });

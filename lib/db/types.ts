@@ -185,3 +185,35 @@ export interface Reaction {
   sender_id: string | null;
   reaction_type: ReactionType;
 }
+
+export interface DatabaseHealth {
+  /** Every row in the message table, including reactions/stickers/edits. */
+  totalMessages: number;
+  /** Messages the viewer actually renders (excludes the 2000–3005 band). */
+  displayableMessages: number;
+  /** Messages with a populated plain-text `text` column. */
+  withText: number;
+  /** Empty `text` but a populated `attributedBody` — text recoverable by decode. */
+  recoverableText: number;
+  /** Empty `text` and no `attributedBody` — genuinely empty (usually attachments). */
+  trueEmpty: number;
+  /** Displayable-message count grouped by calendar year. */
+  messagesByYear: Array<{ year: number; count: number }>;
+  attachments: {
+    total: number;
+    withFilename: number;
+    /** transfer_state distribution. 5 = downloaded/present, 0 = not downloaded. */
+    byTransferState: Array<{ state: number; count: number }>;
+    /** ck_sync_state distribution (CloudKit sync bookkeeping). */
+    byCkSyncState: Array<{ state: number; count: number }>;
+    /** Sampled filesystem presence check; null when no attachmentsPath given. */
+    onDisk: {
+      sampled: number;
+      present: number;
+      missing: number;
+      presentRate: number;
+      estimatedPresent: number;
+      estimatedMissing: number;
+    } | null;
+  };
+}

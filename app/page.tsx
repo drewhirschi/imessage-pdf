@@ -195,7 +195,13 @@ export default function HomePage() {
             </div>
           )}
 
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-4">
+          <Link
+            href={`/diagnostics?dbPath=${encodeURIComponent(dbPath)}&attachmentsPath=${encodeURIComponent(attachmentsPath)}`}
+            className="text-sm text-blue-600 hover:text-blue-800 underline"
+          >
+            Database health →
+          </Link>
           <Link
             href={`/contacts?dbPath=${encodeURIComponent(dbPath)}&contactsPath=${encodeURIComponent(contactsPath)}`}
             className="text-sm text-blue-600 hover:text-blue-800 underline"
