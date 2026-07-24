@@ -69,7 +69,7 @@ export async function GET(
       try {
         const inputBuffer = fs.readFileSync(fullPath);
         const outputBuffer = await convert({
-          buffer: inputBuffer as any, // Type assertion: heic-convert accepts Buffer despite types
+          buffer: inputBuffer as unknown as ArrayBufferLike, // heic-convert accepts a Node Buffer despite its ArrayBuffer types
           format: "JPEG",
           quality: 0.9,
         });

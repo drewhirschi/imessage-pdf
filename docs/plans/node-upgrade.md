@@ -1,35 +1,67 @@
-# Plan: Run on Current Node (24 LTS)
+# Node upgrade: drop better-sqlite3 for node:sqlite
 
-**Status:** draft — needs review
+**Status: DONE (2026-07-23).** Migrated the DB layer off the `better-sqlite3`
+native module onto Node's built-in `node:sqlite` (`DatabaseSync`). Behavior is
+preserved. Bumped `sharp`, Next (within 15.x), `@types/node`; added Vitest with a
+self-contained fixture DB. Validated on Node 22.23.1 (with `--experimental-sqlite`)
+and Node 24.10.0 (stable, no flag) on Linux. macOS run not yet exercised (see below).
 
 ## Summary
 
-The app currently only runs on Node 22 (dev machine is on v22.23.1); on the latest Node it breaks. Get it working on Node 24 LTS (and tolerant of newer), primarily by taming the native-module story. This is also a prerequisite for the Electron packaging plan ([electron-app.md](electron-app.md)) — every native module we drop is one less thing to rebuild against Electron's ABI.
+`better-sqlite3` is a native addon that has to be compiled per Node ABI, which is
+what broke on newer Node and forces the `pnpm.onlyBuiltDependencies` dance.
+`node:sqlite` ships with Node (stable in 24, `--experimental-sqlite` in 22.5+), so
+there is nothing to compile. All SQL is isolated in `lib/db/connection.ts` and
+`lib/db/queries.ts`, so the swap is contained behind a small compatibility adapter.
+This was also a prerequisite for the Electron packaging plan ([electron-app.md](electron-app.md)) —
+every native module dropped is one less thing to rebuild against Electron's ABI.
 
-## Diagnosis (to confirm as step 1)
+## Scope
 
-The likely breakage points, in order of suspicion:
+- Replace the connection in `lib/db/connection.ts` with a `node:sqlite` adapter
+  that keeps the `prepare().get()/.all()/.run()` surface. **No query changes.**
+- Remove `better-sqlite3` + `@types/better-sqlite3`; update
+  `pnpm.onlyBuiltDependencies` (keep `sharp`, `unrs-resolver`).
+- Bump `sharp` to latest, Next within 15.x, `@types/node` to 24 (for `node:sqlite`
+  typings). `heic-convert` was already at latest (2.1.0).
+- `engines.node >=24` + `.nvmrc` = 24. Keep Node 22 working via `NODE_OPTIONS`.
+- Add Vitest + fixture-backed unit tests.
 
-1. **`better-sqlite3`** — native addon compiled per Node ABI. New Node major → prebuilt binary missing or build script skipped (pnpm v10 `onlyBuiltDependencies` gotcha compounds this). This is the classic "Could not locate the bindings file" failure.
-2. **`sharp`** — native, same ABI story, though sharp ships prebuilds quickly.
-3. **Next 15.5 + Turbopack** on very new Node majors — occasionally lags a major release.
+## Open questions (answered)
 
-Step 1 of the work is to install the latest Node, run `pnpm install && pnpm dev`, and record the actual errors before fixing anything.
+- **Does `node:sqlite` read-only handle the WAL sidecars correctly?**
+  Yes. Opening `chat.db` with `{ readOnly: true }` while `chat.db-wal` /
+  `chat.db-shm` are present works and returns rows that include un-checkpointed
+  WAL data — verified against the real 82GB backup. Writes are rejected with
+  `ERR_SQLITE_ERROR: attempt to write a readonly database`.
+- **Big integers?** This was the one real behavioral gotcha. `node:sqlite` throws
+  `ERR_OUT_OF_RANGE` for integer columns beyond `Number.MAX_SAFE_INTEGER` — and
+  iMessage nanosecond dates (~7.8e17) are all beyond it. better-sqlite3 silently
+  returned lossy doubles. Fix: `setReadBigInts(true)` on every statement, then
+  `Number(bigint)` at the adapter boundary → identical lossy-double behavior, so
+  the downstream `/ 1e9` math and `JSON.stringify` are unchanged.
+- **Does the `--experimental-sqlite` flag error on Node 24?** No — it is accepted
+  as a no-op there, so a single `NODE_OPTIONS=--experimental-sqlite` in the npm
+  scripts works on both Node 22 and 24. It is a temporary bridge for Node 22.
+- **Is `unrs-resolver` still pulled in after the Next bump?** Yes — still in the
+  lockfile and kept in `onlyBuiltDependencies`.
+- **Duplicate column names** (`m.*` + `h.id AS handle_id` in the messages query):
+  both drivers keep the last column, so `handle.id`/`handle_id` resolve to the
+  string handle id under node:sqlite exactly as before. Not a regression.
 
-## Proposed approach
+## Approach (as implemented)
 
-1. **Replace `better-sqlite3` with `node:sqlite`.** Node's built-in SQLite (stable since 24) has a nearly identical synchronous API (`DatabaseSync`, `prepare`, `all`/`get`). We open read-only and run plain SELECTs — no exotic features. This deletes our biggest native dependency, ends the ABI treadmill entirely, and makes Electron packaging dramatically simpler. All SQL is already isolated in `lib/db/connection.ts` + `queries.ts`, so the change is contained.
-2. **Keep `sharp`** (prebuilds are reliable) but bump to latest; same for `heic-convert`.
-3. **Bump Next to latest 15.x** (or 16 if that's what supports current Node — check the support matrix at upgrade time) via `vercel:next-upgrade` codemods if a major is needed.
-4. **Pin an engines field**: `"engines": { "node": ">=24" }` in `package.json` plus a `.nvmrc`/`.node-version` so contributors and the Electron build agree on a version.
-5. Update CLAUDE.md's Running section (the pnpm rebuild advice changes once better-sqlite3 is gone).
+- `lib/db/connection.ts`: `wrap(DatabaseSync)` → `{ prepare, close }`; each
+  prepared statement calls `setReadBigInts(true)` and normalizes BigInt→Number.
+- Scripts gain `NODE_OPTIONS=--experimental-sqlite`; `next.config.js` no longer
+  externalizes `better-sqlite3` (`node:` builtins are auto-external).
+- Tests: `test/fixture.ts` builds a temp `chat.db` (chat, handle, message,
+  attachment, the three joins) with realistic ns timestamps and reactions
+  (`associated_message_type` 2000–2005). Suites: `lib/db/connection.test.ts`,
+  `lib/db/queries.test.ts`, `lib/utils/timestamp.test.ts`.
 
-## Open questions
+## Left for a human on macOS
 
-- Does `node:sqlite` handle the WAL sidecar files (`chat.db-wal`/`-shm`) in read-only mode the same way? better-sqlite3 opens with `readonly: true`; node:sqlite has `readOnly: true` — verify against the real backup, including a db where the WAL contains recent messages.
-- `unrs-resolver` is in `onlyBuiltDependencies` — is it still pulled in after the Next bump?
-
-## Out of scope
-
-- Electron itself (separate plan).
-- Any query/feature changes — this is a pure platform migration; behavior must be identical.
+- Run `pnpm dev` / `pnpm build` / a real conversation + PDF export on macOS
+  against a live `~/Library/Messages/chat.db`. The migration was validated on
+  Linux only; nothing is platform-specific, but the app's real home is macOS.
