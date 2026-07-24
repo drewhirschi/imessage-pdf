@@ -377,7 +377,7 @@ function ConversationPageInner() {
           </p>
           {contactsPath && unresolvedCount > 0 && (
             <div className="mb-2 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-800">
-              {unresolvedCount} unnamed number{unresolvedCount === 1 ? '' : 's'} in
+              {unresolvedCount} unnamed contact{unresolvedCount === 1 ? '' : 's'} in
               this chat — click the ✎ to name {unresolvedCount === 1 ? 'it' : 'them'}.
             </div>
           )}

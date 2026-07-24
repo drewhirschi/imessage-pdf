@@ -26,6 +26,7 @@ export default function PathConfiguration({
   const [attachmentsPath, setAttachmentsPath] = useState(initialAttachmentsPath);
   const [contactsPath, setContactsPath] = useState(DEFAULT_CONTACTS_PATH);
   const [isConfigured, setIsConfigured] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [fileExplorerOpen, setFileExplorerOpen] = useState(false);
   const [fileExplorerMode, setFileExplorerMode] = useState<FileExplorerMode>('file');
   const [fileExplorerTarget, setFileExplorerTarget] = useState<'db' | 'attachments' | 'contacts'>('db');
@@ -47,14 +48,40 @@ export default function PathConfiguration({
     }
   }, [onPathsSet]);
 
-  const handleSave = () => {
-    if (dbPath && attachmentsPath) {
-      localStorage.setItem('imessage-db-path', dbPath);
-      localStorage.setItem('imessage-attachments-path', attachmentsPath);
-      localStorage.setItem('imessage-contacts-path', contactsPath || DEFAULT_CONTACTS_PATH);
-      setIsConfigured(true);
-      onPathsSet(dbPath, attachmentsPath, contactsPath || DEFAULT_CONTACTS_PATH);
+  const handleSave = async () => {
+    if (!dbPath || !attachmentsPath) return;
+    // Resolve through the health endpoint so a backup folder containing
+    // chat.db + Attachments/ saves as the actual file paths, and typos
+    // surface here instead of as broken API calls later.
+    let resolvedDb = dbPath;
+    let resolvedAtt = attachmentsPath;
+    try {
+      const res = await fetch(
+        `/api/health?dbPath=${encodeURIComponent(dbPath)}&attachmentsPath=${encodeURIComponent(attachmentsPath)}`,
+      );
+      if (res.ok) {
+        const h = await res.json();
+        if (h.db?.status !== 'ok') {
+          setSaveError(
+            h.db?.detail ||
+              'Could not open a Messages database at that path. Check the path and try again.',
+          );
+          return;
+        }
+        resolvedDb = h.resolved?.dbPath || dbPath;
+        resolvedAtt = h.resolved?.attachmentsPath || attachmentsPath;
+      }
+    } catch {
+      // Health endpoint unreachable — fall through and save what was typed.
     }
+    setSaveError(null);
+    localStorage.setItem('imessage-db-path', resolvedDb);
+    localStorage.setItem('imessage-attachments-path', resolvedAtt);
+    localStorage.setItem('imessage-contacts-path', contactsPath || DEFAULT_CONTACTS_PATH);
+    setDbPath(resolvedDb);
+    setAttachmentsPath(resolvedAtt);
+    setIsConfigured(true);
+    onPathsSet(resolvedDb, resolvedAtt, contactsPath || DEFAULT_CONTACTS_PATH);
   };
 
   const handleReset = () => {
@@ -288,6 +315,12 @@ export default function PathConfiguration({
             Maps phone numbers and emails to names. Created automatically on first edit.
           </p>
         </div>
+
+        {saveError && (
+          <p className="text-sm text-red-600" role="alert">
+            {saveError}
+          </p>
+        )}
 
         <button
           onClick={handleSave}

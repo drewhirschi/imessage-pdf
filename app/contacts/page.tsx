@@ -120,7 +120,13 @@ function ContactsEditor() {
       try {
         const text = await file.text();
         const raw = JSON.parse(text) as ContactsBook;
-        if (!raw || typeof raw !== 'object' || typeof raw.contacts !== 'object') {
+        if (
+          !raw ||
+          typeof raw !== 'object' ||
+          !raw.contacts ||
+          typeof raw.contacts !== 'object' ||
+          Array.isArray(raw.contacts)
+        ) {
           throw new Error('Not a valid contacts book (missing "contacts").');
         }
         parsed = raw;

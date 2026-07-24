@@ -85,6 +85,19 @@ export default function HomePage() {
       localStorage.getItem(CONTACTS_KEY) || DEFAULT_CONTACTS_PATH;
     if (savedDb && savedAtt) {
       goReady(savedDb, savedAtt, savedContacts, false);
+      // Background re-probe: saved paths can go stale (FDA revoked, db
+      // moved). Route to the right screen instead of a raw fetch error.
+      fetch(
+        `/api/health?dbPath=${encodeURIComponent(savedDb)}&attachmentsPath=${encodeURIComponent(savedAtt)}`,
+      )
+        .then((res) => (res.ok ? res.json() : null))
+        .then((h: HealthResponse | null) => {
+          if (!h) return;
+          setHealth(h);
+          if (h.db.status === 'permission_denied') setPhase('permission');
+          else if (h.db.status === 'not_found') setPhase('manual');
+        })
+        .catch(() => {});
       return;
     }
     runAutoDetect();
@@ -170,6 +183,17 @@ export default function HomePage() {
             Change
           </button>
         </div>
+
+        {health?.db.status === 'ok' &&
+          health.attachments.status === 'not_found' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-800">
+              Attachments folder not found at{' '}
+              <code className="text-xs bg-white/70 px-1 py-0.5 rounded break-all">
+                {health.attachments.path}
+              </code>{' '}
+              — messages will load, but images and files won&apos;t.
+            </div>
+          )}
 
         <div className="flex justify-end">
           <Link
