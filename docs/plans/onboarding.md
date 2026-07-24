@@ -1,6 +1,45 @@
 # Plan: First-Run Onboarding — Permissions, Path Auto-Detection, Contacts
 
-**Status:** draft — needs review
+**Status:** implemented (2026-07-23). All four parts shipped. Verified with `pnpm test`
+(51 tests green), `pnpm build`, `pnpm lint` (no new findings), and live checks against the
+real backup at `/home/drew/work/hannah-imessage/`. macOS-only pieces (the FDA deep link,
+`Quit & Reopen`, and the "found + readable default → straight to conversations" happy path)
+are built and degrade gracefully but could only be exercised on macOS. See the
+"What shipped" section below.
+
+## What shipped
+
+- **Health endpoint** `GET /api/health?dbPath&attachmentsPath`. With no params it probes the
+  macOS default (`~/Library/Messages/chat.db` + `Attachments`); with params it probes the given
+  paths and transparently resolves the *backup-folder* shape (a directory containing
+  `chat.db` + `Attachments/`). Returns per-path `{status, path, detail, code?}` plus an
+  `overall` status and the `resolved` paths the client should save. Probe logic lives in
+  `lib/health/probe.ts` (framework-free, unit-tested) and `lib/health/detect.ts`
+  (default + backup-folder resolution). Error mapping: `ENOENT → not_found`;
+  `EACCES/EPERM/SQLITE_CANTOPEN → permission_denied`; readable+openable → `ok`.
+- **First-load flow** (`app/page.tsx` state machine: loading → ready | permission | manual).
+  No saved paths → probe defaults → `ok` saves silently and shows a "Using database at … (change)"
+  banner above the conversation list; `permission_denied` → the Full Disk Access screen;
+  `not_found` → the manual `PathConfiguration` picker, prefilled with the default paths and a
+  hint about what we looked for. The FDA screen re-runs the health check on window focus so it
+  clears itself once access is granted.
+- **Full Disk Access screen** (`components/FullDiskAccessScreen.tsx`): read-only/local
+  reassurance, the correct grantee (Electron app vs terminal, detected via a `window.electron`
+  bridge), the `x-apple.systempreferences:…Privacy_AllFiles` deep link (via the Electron bridge's
+  `openExternal`, else a best-effort browser navigation with written fallback instructions),
+  an Electron-only "Quit & Reopen", plus Retry and manual-entry escapes.
+- **Click-to-name** is wired on every raw-handle surface: group sender labels above bubbles
+  (`MessageBubble` — already present, left minimal), sidebar participant chips (pencil now always
+  visible for unresolved handles, hover-only once named), and `ReactionDetailsModal` sender rows.
+- **Contacts polish**: nav link to `/contacts` from the home page and the conversation sidebar;
+  Export (JSON download) / Import (JSON upload with a confirm-before-replace via `PUT`) on
+  `/contacts`; and a "N unnamed numbers in this chat — name them" banner in the conversation
+  sidebar.
+- **Group-chat pass**: `test/fixture.ts` group chat now has 3 handles and 3 distinct senders
+  plus a group reaction sent by a non-author; added query tests for multi-sender attribution
+  and reaction-sender grouping. Verified a real 3-person group in the viewer and the print route
+  (multi-sender labels, participant list, unnamed-group comma-joined title, unnamed banner, and
+  click-to-name persisting through the PATCH flow into a throwaway contacts file).
 
 Covers three user-facing asks that are really one flow: (1) tell the user clearly when macOS permissions are missing and how to grant them, (2) auto-detect `chat.db` and the `Attachments` folder instead of making the user type paths, (3) make sure adding contact names in-app is smooth. Pairs with [electron-app.md](electron-app.md) — this flow is what a non-developer sees the first time they open the packaged app.
 
@@ -55,7 +94,26 @@ Group chats are the stress case for most of the app and need explicit test cover
 ## Open questions
 
 1. Is a health/permission check on every window focus too chatty, or fine since it's one local `open()`?
+   **Resolved:** we only re-probe on focus while the FDA screen is showing (not on every focus of
+   a working session), so it's one cheap local `open()` exactly when it's useful. If we later want
+   it everywhere it's still cheap, but scoping it to the permission screen avoided the chattiness
+   concern entirely.
 2. For pure-browser dev mode, can we reliably tell *which* terminal app needs FDA? (Probably not — generic instructions are fine there; the Electron path is the one that must be polished.)
+   **Resolved as expected:** in browser mode we show generic "your terminal app (Terminal/iTerm)"
+   guidance; the Electron branch (detected via a `window.electron` preload bridge) names the app
+   itself and offers the deep link + relaunch.
+
+## Follow-ups / notes
+
+- The "backup folder" resolution keys off a directory literally containing `chat.db`. If a user
+  points at a parent that only *contains* such a folder we do not recurse — kept intentionally
+  shallow to avoid scanning large trees.
+- The Electron bridge (`window.electron.openExternal` / `relaunch`) is referenced but the preload
+  script itself belongs to the electron-app plan; until that ships the controls simply hide in
+  browser mode.
+- Overall status keys primarily off the database: `db ok` + `attachments not_found` still lets you
+  read text, so it does not force the permission screen (attachments-only permission problems do,
+  since those are the same FDA gate on macOS).
 
 ## Out of scope
 

@@ -42,9 +42,9 @@ describe("getAllConversations", () => {
     // pre-existing behavior, identical under better-sqlite3 and node:sqlite.
     expect(chat1.message_count).toBe(5);
     expect(chat1.is_group).toBe(false);
-    // chat 2 has 2 participants => group.
+    // chat 2 has 3 participants => group.
     expect(chat2.is_group).toBe(true);
-    expect(chat2.participants).toHaveLength(2);
+    expect(chat2.participants).toHaveLength(3);
   });
 
   it("preserves large iMessage nanosecond timestamps as numbers", () => {
@@ -149,11 +149,52 @@ describe("getConversationDetails", () => {
     expect(details.participants.sort()).toEqual([
       "+15551112222",
       "+15553334444",
+      "+15555556666",
     ]);
   });
 
   it("returns null for unknown chat", () => {
     expect(getConversationDetails(999)).toBeNull();
+  });
+});
+
+describe("group chat (chat 2) — multi-sender attribution", () => {
+  it("attributes each message to the correct sender handle", () => {
+    const { messages, total } = getMessagesForConversation(2);
+    // 3 real messages (reaction row 40 excluded).
+    expect(total).toBe(3);
+    const byRow = new Map(messages.map((m) => [m.message.ROWID, m]));
+    // handle.id is aliased to the string handle identifier in the query.
+    expect(byRow.get(20)?.handle?.id).toBe("+15553334444");
+    expect(byRow.get(21)?.handle?.id).toBe("+15555556666");
+    // message 22 is from me → no handle.
+    expect(byRow.get(22)?.handle).toBeNull();
+    expect(byRow.get(22)?.message.is_from_me).toBe(1);
+  });
+
+  it("keeps three distinct senders across the run", () => {
+    const { messages } = getMessagesForConversation(2);
+    const senders = new Set(
+      messages.map((m) =>
+        m.message.is_from_me === 1 ? "me" : m.handle?.id ?? "unknown",
+      ),
+    );
+    expect(senders.has("+15553334444")).toBe(true);
+    expect(senders.has("+15555556666")).toBe(true);
+    expect(senders.has("me")).toBe(true);
+  });
+
+  it("groups a reaction onto the right target and attributes its sender", () => {
+    const { messages } = getMessagesForConversation(2);
+    const m20 = messages.find((m) => m.message.ROWID === 20)!;
+    expect(m20.reactions).toHaveLength(1);
+    expect(m20.reactions[0].reaction_type).toBe("laugh");
+    // The reaction was sent by handle 3 (+15555556666), not the message author.
+    expect(m20.reactions[0].sender_id).toBe("+15555556666");
+    expect(m20.reactions[0].is_from_me).toBe(0);
+    // Other group messages carry no reactions.
+    const m21 = messages.find((m) => m.message.ROWID === 21)!;
+    expect(m21.reactions).toHaveLength(0);
   });
 });
 

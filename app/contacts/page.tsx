@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -29,6 +29,7 @@ function ContactsEditor() {
   const [query, setQuery] = useState('');
   const [showOnlyUnresolved, setShowOnlyUnresolved] = useState(false);
   const [saveState, setSaveState] = useState<Record<string, 'saving' | 'saved'>>({});
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!dbPath) {
@@ -97,6 +98,67 @@ function ContactsEditor() {
     [contactsPath],
   );
 
+  const exportBook = useCallback(() => {
+    const book: ContactsBook = { version: 1, contacts };
+    const blob = new Blob([JSON.stringify(book, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `imessage-contacts-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [contacts]);
+
+  const importBook = useCallback(
+    async (file: File) => {
+      setError(null);
+      let parsed: ContactsBook;
+      try {
+        const text = await file.text();
+        const raw = JSON.parse(text) as ContactsBook;
+        if (!raw || typeof raw !== 'object' || typeof raw.contacts !== 'object') {
+          throw new Error('Not a valid contacts book (missing "contacts").');
+        }
+        parsed = raw;
+      } catch (err) {
+        setError(
+          err instanceof Error ? `Import failed: ${err.message}` : 'Import failed',
+        );
+        return;
+      }
+      const count = Object.keys(parsed.contacts).length;
+      const existing = Object.keys(contacts).length;
+      const ok = window.confirm(
+        `Replace the current contacts book (${existing} name${existing === 1 ? '' : 's'}) ` +
+          `with the imported file (${count} name${count === 1 ? '' : 's'})? ` +
+          `This cannot be undone.`,
+      );
+      if (!ok) return;
+      try {
+        const res = await fetch(
+          `/api/contacts?path=${encodeURIComponent(contactsPath)}`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contacts: parsed.contacts }),
+          },
+        );
+        if (!res.ok) throw new Error('server rejected the import');
+        setContacts(parsed.contacts);
+        await load();
+      } catch (err) {
+        setError(
+          err instanceof Error ? `Import failed: ${err.message}` : 'Import failed',
+        );
+      }
+    },
+    [contacts, contactsPath, load],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return handles.filter((h) => {
@@ -136,9 +198,36 @@ function ContactsEditor() {
             <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">{contactsPath}</code>
           </p>
         </div>
-        <Link href="/" className="text-sm text-blue-600 hover:text-blue-800 underline">
-          ← Back
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={exportBook}
+            className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+          >
+            Export
+          </button>
+          <button
+            type="button"
+            onClick={() => importInputRef.current?.click()}
+            className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+          >
+            Import
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) importBook(file);
+              e.target.value = '';
+            }}
+          />
+          <Link href="/" className="text-sm text-blue-600 hover:text-blue-800 underline">
+            ← Back
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-4">

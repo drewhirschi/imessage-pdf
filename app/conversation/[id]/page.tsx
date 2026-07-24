@@ -330,6 +330,10 @@ function ConversationPageInner() {
     ? conversationDetails.participants.map((p) => contacts?.resolve(p) ?? p)
     : [];
 
+  const unresolvedCount = conversationDetails
+    ? conversationDetails.participants.filter((p) => !contacts?.resolve(p)).length
+    : 0;
+
   const getConversationName = () => {
     if (!conversationDetails) return `Conversation ${chatId}`;
     if (conversationDetails.display_name) return conversationDetails.display_name;
@@ -341,12 +345,20 @@ function ConversationPageInner() {
   const sidebar = (
     <aside className="w-full lg:w-72 lg:flex-shrink-0 lg:border-r lg:border-gray-200 bg-white lg:h-screen lg:overflow-y-auto">
       <div className="p-4 border-b border-gray-200">
-        <Link
-          href="/"
-          className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center"
-        >
-          ← All conversations
-        </Link>
+        <div className="flex items-center justify-between">
+          <Link
+            href="/"
+            className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center"
+          >
+            ← All conversations
+          </Link>
+          <Link
+            href={`/contacts?dbPath=${encodeURIComponent(dbPath)}&contactsPath=${encodeURIComponent(contactsPath)}`}
+            className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center"
+          >
+            Contacts
+          </Link>
+        </div>
         <h1 className="text-base font-semibold text-gray-900 leading-tight break-words mt-2">
           {getConversationName()}
         </h1>
@@ -363,6 +375,12 @@ function ConversationPageInner() {
           <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
             Participants
           </p>
+          {contactsPath && unresolvedCount > 0 && (
+            <div className="mb-2 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-800">
+              {unresolvedCount} unnamed number{unresolvedCount === 1 ? '' : 's'} in
+              this chat — click the ✎ to name {unresolvedCount === 1 ? 'it' : 'them'}.
+            </div>
+          )}
           <ul className="space-y-1.5">
             {conversationDetails.participants.map((raw) => {
               const resolved = contacts?.resolve(raw) ?? null;
@@ -372,7 +390,13 @@ function ConversationPageInner() {
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-gray-900">{resolved ?? raw}</span>
                       {contactsPath && (
-                        <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span
+                          className={
+                            resolved
+                              ? 'opacity-0 group-hover:opacity-100 transition-opacity'
+                              : 'opacity-100'
+                          }
+                        >
                           <InlineNameEditor handleId={raw} />
                         </span>
                       )}

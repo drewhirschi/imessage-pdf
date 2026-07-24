@@ -80,14 +80,16 @@ export function createFixtureDb(): Fixture {
     );
   `);
 
-  // Handles
+  // Handles. Handle 3 is a third participant so the group chat exercises
+  // multi-sender attribution (review flagged that 2 handles was too few).
   db.exec(`
     INSERT INTO handle (ROWID, id, service) VALUES
       (1, '+15551112222', 'iMessage'),
-      (2, '+15553334444', 'iMessage');
+      (2, '+15553334444', 'iMessage'),
+      (3, '+15555556666', 'iMessage');
   `);
 
-  // Chats: chat 1 is a 1:1 (handle 1), chat 2 is a group (handles 1 & 2),
+  // Chats: chat 1 is a 1:1 (handle 1), chat 2 is a group (handles 1, 2 & 3),
   // chat 3 is archived and must be excluded.
   db.exec(`
     INSERT INTO chat (ROWID, chat_identifier, display_name, group_id, is_archived) VALUES
@@ -101,6 +103,7 @@ export function createFixtureDb(): Fixture {
       (1, 1),
       (2, 1),
       (2, 2),
+      (2, 3),
       (3, 1);
   `);
 
@@ -114,8 +117,25 @@ export function createFixtureDb(): Fixture {
   insMsg.run(10, UUID_A, "Hey there", 1, 0, TS.t1, null, null, "iMessage");
   insMsg.run(11, UUID_B, "Reply from me", null, 1, TS.t2, null, null, "iMessage");
   insMsg.run(12, UUID_C, "Later message", 1, 0, TS.t4, null, null, "iMessage");
-  // chat 2 message
-  insMsg.run(20, "44444444-4444-4444-4444-444444444444", "Group hello", 2, 0, TS.t3, null, null, "iMessage");
+  // chat 2 (group) messages from three distinct senders: handle 2, handle 3,
+  // and me. Exercises multi-sender attribution.
+  const GROUP_MSG_20 = "44444444-4444-4444-4444-444444444444";
+  insMsg.run(20, GROUP_MSG_20, "Group hello", 2, 0, TS.t3, null, null, "iMessage");
+  insMsg.run(21, "aaaa1111-4444-4444-4444-444444444444", "Hi from three", 3, 0, TS.t3, null, null, "iMessage");
+  insMsg.run(22, "bbbb2222-4444-4444-4444-444444444444", "Reply in the group", null, 1, TS.t4, null, null, "iMessage");
+
+  // A laugh reaction (2003) in the group from handle 3, targeting message 20.
+  insMsg.run(
+    40,
+    "cccc3333-4444-4444-4444-444444444444",
+    null,
+    3,
+    0,
+    TS.t4,
+    2003,
+    `p:0/${GROUP_MSG_20}`,
+    "iMessage"
+  );
 
   // A reaction (heart, 2000) targeting message 10 (guid UUID_A), prefixed guid.
   insMsg.run(
@@ -145,7 +165,7 @@ export function createFixtureDb(): Fixture {
   db.exec(`
     INSERT INTO chat_message_join (chat_id, message_id) VALUES
       (1, 10), (1, 11), (1, 12), (1, 30), (1, 31),
-      (2, 20);
+      (2, 20), (2, 21), (2, 22), (2, 40);
   `);
 
   // Attachment on message 12.

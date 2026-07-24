@@ -1,18 +1,29 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import FileExplorer from './FileExplorer';
 import { FileExplorerMode } from '@/lib/types/file-system';
 
 interface PathConfigurationProps {
   onPathsSet: (dbPath: string, attachmentsPath: string, contactsPath: string) => void;
+  /** Prefill the db path input (e.g. with the auto-detected default). */
+  initialDbPath?: string;
+  /** Prefill the attachments path input. */
+  initialAttachmentsPath?: string;
+  /** Optional hint rendered above the form (what we looked for and didn't find). */
+  hint?: ReactNode;
 }
 
 const DEFAULT_CONTACTS_PATH = '~/.imessage-pdf/contacts.json';
 
-export default function PathConfiguration({ onPathsSet }: PathConfigurationProps) {
-  const [dbPath, setDbPath] = useState('');
-  const [attachmentsPath, setAttachmentsPath] = useState('');
+export default function PathConfiguration({
+  onPathsSet,
+  initialDbPath = '',
+  initialAttachmentsPath = '',
+  hint,
+}: PathConfigurationProps) {
+  const [dbPath, setDbPath] = useState(initialDbPath);
+  const [attachmentsPath, setAttachmentsPath] = useState(initialAttachmentsPath);
   const [contactsPath, setContactsPath] = useState(DEFAULT_CONTACTS_PATH);
   const [isConfigured, setIsConfigured] = useState(false);
   const [fileExplorerOpen, setFileExplorerOpen] = useState(false);
@@ -138,6 +149,12 @@ export default function PathConfiguration({ onPathsSet }: PathConfigurationProps
       <p className="text-sm text-blue-700 mb-4">
         Enter the paths to your iMessage database and attachments folder. You can type the paths manually or use the Browse button to select files (note: file picker may not work in all browsers for security reasons).
       </p>
+
+      {hint && (
+        <div className="text-sm text-blue-800 bg-blue-100 border border-blue-200 rounded-md p-3 mb-4">
+          {hint}
+        </div>
+      )}
 
       <div className="space-y-4">
         <div>
