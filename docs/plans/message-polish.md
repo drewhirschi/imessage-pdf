@@ -1,6 +1,6 @@
 # Plan: Message Rendering Polish — Attachments, Link Cards, QR Codes
 
-**Status:** draft — needs review
+**Status:** shipped (2026-07-23). All three parts implemented and verified against the real backup (web + print + a generated PDF). See "Implementation notes" below.
 
 ## Summary
 
@@ -37,12 +37,57 @@ All changes flow through `MessageBubble` and friends, so the PDF (which prints t
 - Unit tests for the URL/message-shape classifier (bare URL vs text+URL vs inline) and for `payload_data` decoding if implemented (fixture blobs from the real backup).
 - Visual verification against `/home/drew/work/hannah-imessage/` conversations with heavy image + link traffic; before/after screenshots on web and print routes.
 
-## Open questions
+## Open questions — resolved
 
-1. Decode `payload_data` for real link titles/preview images in v1, or ship domain-only cards first? (Lean: ship domain-only, decode as fast-follow if the format cooperates.)
-2. QR for *every* link, or only messages that are pure link shares? Inline-sentence links might get noisy.
+1. **Decode `payload_data` or ship domain-only?** → **Decoded.** The format cooperates
+   completely. `payload_data` is a `bplist00` NSKeyedArchiver archive of a `RichLink`
+   wrapper whose `richLinkMetadata` is an `LPLinkMetadata`. We hand-rolled a minimal
+   binary-plist reader + NSKeyedArchiver deref (`lib/link-preview/decode.ts`) and pull
+   `originalURL`/`URL` (NSURL → `NS.relative`), `title`, `siteName`, `summary`. Against 12
+   real recent blobs from the backup we got **12/12** clean extractions (url + title, most
+   with siteName + summary). Rich-link messages have `text = NULL`, so this decode is the
+   *only* way to render them — domain-only would have shown nothing useful. Decoding runs
+   **server-side** in `/api/messages` (payload stays off the wire).
+2. **QR for every link or only pure shares?** → **Only link *cards*** (bare-URL messages and
+   rich links). Inline/trailing URLs inside sentences keep plain linkification with no QR, so
+   the print output isn't noisy.
+
+## Implementation notes
+
+- **Classifier** (`lib/link-preview/classify.ts`, `classifyMessage`): `no-url` |
+  `bare-url` (whole message is one URL, trailing punctuation tolerated) | `trailing-url`
+  (text then a single URL at the end) | `inline` (URL mid-sentence, or 2+ URLs). Only http/https
+  count; other schemes (mailto:/tel:/ftp:) are ignored. `trimUrl` strips trailing sentence
+  punctuation and a dangling `)` that has no matching `(` inside the URL. Bare-URL and rich-link
+  messages render a `LinkCard` in place of the text bubble; trailing/inline keep linkified text.
+- **Attachment layout** (`MessageBubble.tsx`): media renders as its own rounded 18px bubble
+  stacked above the text bubble (real iMessage behavior); the tail corner is applied only to the
+  last bubble of the stack. Single image = one media bubble (height-capped at 320px so portrait
+  screenshots don't dominate); 2+ images = a 2-up `object-cover` grid. vCard/location/video/
+  generic attachments each become their own bubble. `ImageAttachment` is now layout-agnostic
+  (parent owns radius/size).
+- **QR** (`components/QRCode.tsx`): rendered as **inline SVG** built synchronously from
+  `qrcode`'s module matrix, ~64px, inside the link card, print-only (`forPrint`).
+  *Deviation from the plan's "data-URL `<img>`":* inline SVG is guaranteed present at render
+  with no async image decode, so the print-ready gate (which waits on `<img>` load) can never
+  miss it, and it's vector-crisp. Still the pure-JS `qrcode` package, no network.
+- **Print CSS** (`globals.css`): `@media print` sets `break-inside/page-break-inside: avoid`
+  on `.message-bubble-item` (and its media) and forces `print-color-adjust: exact` so blue
+  bubbles and link cards keep their backgrounds under `page.pdf()`.
+
+### Verification
+
+- `pnpm test` green (55 tests incl. 19 classifier + 5 decode with 2 real innocuous fixture blobs
+  in `lib/link-preview/__fixtures__/`). `pnpm build` passes. `pnpm lint`: no new errors from these
+  files (only a pre-existing `tailwind.config.ts` `require()` error remains).
+- Generated a real 11-page Letter PDF via `POST /api/generate-pdf` for a Sept–Oct 2025 window of
+  chat 2 (link + image heavy): 11 link cards each with a scannable QR, 2-up image grids, and a
+  height-capped portrait screenshot all rendered correctly with backgrounds intact.
 
 ## Out of scope
 
 - Fetching live link previews over the network.
 - Video thumbnails/poster-frame extraction changes (current behavior stays).
+- Rich-link *preview images* embedded in `payload_data` (stored as a separate HEIC attachment
+  substitute) — the card uses a domain monogram instead; wiring the embedded image is a
+  possible fast-follow.

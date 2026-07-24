@@ -136,6 +136,7 @@ function PrintPageInner() {
               isGroup={isGroup}
               dbPath={dbPath}
               attachmentsPath={attachmentsPath}
+              forPrint
             />
           )}
         </div>

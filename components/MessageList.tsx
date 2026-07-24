@@ -8,6 +8,7 @@ import {
   isDifferentDay,
 } from '@/lib/utils/timestamp';
 import type { Reaction } from '@/lib/db/types';
+import type { RichLink } from '@/lib/link-preview/decode';
 
 interface Message {
   ROWID: number;
@@ -34,6 +35,8 @@ export interface MessageWithAttachments {
   handle: Handle | null;
   attachments: Attachment[];
   reactions?: Reaction[];
+  /** Rich URL preview decoded from message.payload_data (server-side). */
+  richLink?: RichLink | null;
 }
 
 interface Props {
@@ -41,6 +44,8 @@ interface Props {
   isGroup: boolean;
   dbPath: string;
   attachmentsPath: string;
+  /** Render for the static print/PDF page: link cards gain a QR code. */
+  forPrint?: boolean;
 }
 
 const sameSender = (
@@ -56,6 +61,7 @@ export default function MessageList({
   isGroup,
   dbPath,
   attachmentsPath,
+  forPrint = false,
 }: Props) {
   return (
     <>
@@ -97,11 +103,13 @@ export default function MessageList({
               handle={current.handle}
               attachments={current.attachments}
               reactions={current.reactions}
+              richLink={current.richLink}
               dbPath={dbPath}
               attachmentsPath={attachmentsPath}
               showTimestamp={showTimestamp}
               showSenderLabel={showSenderLabel}
               isLastOfRun={isLastOfRun}
+              forPrint={forPrint}
             />
           </div>
         );

@@ -80,9 +80,9 @@ export default function VideoAttachment({
             preload="metadata"
             onLoadedMetadata={handleVideoLoad}
             onError={handleVideoError}
-            className="max-w-full h-auto rounded-lg shadow-sm"
-            style={{ 
-              maxHeight: '400px',
+            className="block w-full h-auto"
+            style={{
+              maxHeight: '380px',
               display: isLoading ? 'none' : 'block'
             }}
           >

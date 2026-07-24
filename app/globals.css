@@ -57,3 +57,24 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Print / PDF: keep each message bubble (image, video, link card, text)
+   intact across page breaks, and force background colors to print so blue
+   bubbles and link cards don't drop out. Applies under Puppeteer's page.pdf(),
+   which emulates print media. */
+@media print {
+  .message-bubble-item {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .message-bubble-item img,
+  .message-bubble-item svg,
+  .message-bubble-item video {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

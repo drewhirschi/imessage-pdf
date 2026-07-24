@@ -4,6 +4,7 @@ import {
   getMessagesForConversation,
   getConversationDetails,
 } from "@/lib/db/queries";
+import { decodeRichLink } from "@/lib/link-preview/decode";
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,15 +43,28 @@ export async function GET(request: NextRequest) {
       offset
     );
 
+    // Decode the rich URL preview (LPLinkMetadata) from each message's
+    // payload_data server-side, and drop the raw blob so the JSON stays small.
+    // For rich-link messages message.text is usually NULL — the decoded link is
+    // the only thing the client can render.
+    const enriched = result.messages.map((m) => {
+      const richLink = decodeRichLink(m.message.payload_data);
+      // payload_data is a large binary blob (the archived LPLinkMetadata) that
+      // the client never uses directly once decoded — strip it from the wire.
+      const { payload_data, ...message } = m.message;
+      void payload_data;
+      return { ...m, message, richLink };
+    });
+
     const response: {
-      messages: typeof result.messages;
+      messages: typeof enriched;
       total: number;
       page: number;
       limit: number;
       hasMore: boolean;
       conversationDetails?: ReturnType<typeof getConversationDetails>;
     } = {
-      messages: result.messages,
+      messages: enriched,
       total: result.total,
       page,
       limit,
