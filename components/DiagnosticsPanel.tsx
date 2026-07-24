@@ -20,6 +20,22 @@ const TRANSFER_STATE_LABELS: Record<number, string> = {
   [-1]: 'Failed / unknown',
 };
 
+// Zero-count years must render as empty bars — the visible hole in the
+// histogram is the whole point (it's the partial-sync tell).
+function fillYearGaps(
+  years: { year: number; count: number }[]
+): { year: number; count: number }[] {
+  if (years.length < 2) return years;
+  const byYear = new Map(years.map((y) => [y.year, y.count]));
+  const min = years[0].year;
+  const max = years[years.length - 1].year;
+  const filled: { year: number; count: number }[] = [];
+  for (let y = min; y <= max; y++) {
+    filled.push({ year: y, count: byYear.get(y) ?? 0 });
+  }
+  return filled;
+}
+
 interface Props {
   initialDbPath?: string;
   initialAttachmentsPath?: string;
@@ -150,7 +166,7 @@ export default function DiagnosticsPanel({
               <p className="text-sm text-gray-500">No dated messages.</p>
             ) : (
               <div className="space-y-1">
-                {data.messagesByYear.map((y) => (
+                {fillYearGaps(data.messagesByYear).map((y) => (
                   <div key={y.year} className="flex items-center gap-3">
                     <span className="w-12 text-right text-sm tabular-nums text-gray-600">
                       {y.year}
@@ -228,6 +244,10 @@ export default function DiagnosticsPanel({
                     ))}
                   </tbody>
                 </table>
+                <p className="mt-2 text-xs text-gray-500">
+                  Labels are best-effort, derived empirically from one backup —
+                  meanings may differ across macOS versions.
+                </p>
               </div>
               <div>
                 <h3 className="mb-2 text-sm font-medium text-gray-700">

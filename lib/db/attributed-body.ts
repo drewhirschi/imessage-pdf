@@ -132,6 +132,16 @@ function parsePrintableRuns(buf: Buffer): string | null {
     if (TYPEDSTREAM_TOKENS.has(cleaned)) continue;
     // Skip runs that are a single class-name-ish token (capitalised, no spaces).
     if (!cleaned.includes(" ") && /^[A-Z][A-Za-z0-9]*$/.test(cleaned)) continue;
+    // Fuzzy-reject near-misses of typedstream vocabulary: exact-token matching
+    // misses runs where one byte was corrupted or a marker byte glued two
+    // tokens together ("NSStri@g", "@SAttributedString", "streamtyped@").
+    if (/streamtyped|NS[A-Z]|__kIM|CFAttributed|Attribute(Name|dString)/.test(cleaned)) continue;
+    // Require natural-text shape: real message fragments contain a space or
+    // are mostly lowercase; identifier-shaped soup is never message text.
+    if (!cleaned.includes(" ")) {
+      const lower = (cleaned.match(/[a-z]/g) ?? []).length;
+      if (lower / cleaned.length < 0.5) continue;
+    }
     if (cleaned.length > best.length) best = cleaned;
   }
   return best.length ? best : null;

@@ -246,9 +246,14 @@ export function getMessagesForConversation(
     // `attributedBody` holds the archived NSAttributedString. This runs
     // server-side so the web viewer, print route, and PDF all benefit.
     if ((msg.text === null || msg.text === "") && msg.attributedBody != null) {
-      const recovered = decodeAttributedBody(msg.attributedBody as Buffer);
-      if (recovered) {
-        msg.text = recovered;
+      try {
+        const recovered = decodeAttributedBody(msg.attributedBody as Buffer);
+        if (recovered) {
+          msg.text = recovered;
+        }
+      } catch {
+        // A pathological blob must never take down the whole page; the
+        // bubble just stays empty.
       }
     }
 

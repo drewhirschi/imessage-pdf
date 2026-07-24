@@ -28,9 +28,14 @@ export async function GET(request: NextRequest) {
 
     connectToDatabase(dbPath);
 
+    // Clamp: NaN would make node:sqlite throw on the LIMIT bind, and a huge
+    // value would stat every attachment on disk.
+    const parsedSample = sampleSize ? parseInt(sampleSize, 10) : NaN;
     const health = await getDatabaseHealth({
       attachmentsPath,
-      sampleSize: sampleSize ? parseInt(sampleSize, 10) : undefined,
+      sampleSize: Number.isFinite(parsedSample)
+        ? Math.min(Math.max(parsedSample, 1), 5000)
+        : undefined,
     });
 
     return NextResponse.json(health);

@@ -49,10 +49,12 @@ export async function GET(request: NextRequest) {
     // the only thing the client can render.
     const enriched = result.messages.map((m) => {
       const richLink = decodeRichLink(m.message.payload_data);
-      // payload_data is a large binary blob (the archived LPLinkMetadata) that
-      // the client never uses directly once decoded — strip it from the wire.
-      const { payload_data, ...message } = m.message;
+      // payload_data and attributedBody are large binary blobs the client
+      // never uses directly (rich links and recovered text are decoded
+      // server-side) — strip them from the wire; they add ~40% page weight.
+      const { payload_data, attributedBody, ...message } = m.message;
       void payload_data;
+      void attributedBody;
       return { ...m, message, richLink };
     });
 
