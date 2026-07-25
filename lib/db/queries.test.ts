@@ -77,6 +77,18 @@ describe("getAllConversations", () => {
       page2.conversations[0].chat_id
     );
   });
+
+  it("orders pinned conversations first before pagination", () => {
+    const page = getAllConversations(
+      undefined,
+      undefined,
+      1,
+      0,
+      ["chat-group"],
+    );
+    expect(page.conversations).toHaveLength(1);
+    expect(page.conversations[0].chat_identifier).toBe("chat-group");
+  });
 });
 
 describe("getMessagesForConversation", () => {

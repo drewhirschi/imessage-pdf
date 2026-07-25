@@ -13,6 +13,13 @@ import { ContactsProvider, useContactsOptional } from '@/components/ContactsProv
 import InlineNameEditor from '@/components/InlineNameEditor';
 import SwipeForTimestamps from '@/components/SwipeForTimestamps';
 import type { Reaction } from '@/lib/db/types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Message {
   ROWID: number;
@@ -53,31 +60,17 @@ const DEFAULT_COLUMN_WIDTH = 430;
 const MIN_COLUMN_WIDTH = 320;
 const MAX_COLUMN_WIDTH = 820;
 const COLUMN_WIDTH_STORAGE_KEY = 'imessage-column-width';
+const SCREEN_SIZE_STORAGE_KEY = 'imessage-screen-size';
 const SNAP_POINTS: { width: number; label: string }[] = [
-  { width: 375, label: 'iPhone 8 / SE' },
-  { width: 390, label: 'iPhone 12 / 14' },
-  { width: 393, label: 'iPhone 15 Pro' },
-  { width: 430, label: 'iPhone 15 Pro Max' },
-  { width: 768, label: 'iPad mini' },
+  { width: 375, label: 'iPhone SE' },
+  { width: 390, label: 'iPhone 12 / 13 / 14' },
+  { width: 393, label: 'iPhone 14 / 15 Pro' },
+  { width: 430, label: 'iPhone Pro Max' },
 ];
-const SNAP_THRESHOLD = 10; // px — within this of a snap point, magnetize.
-
-function snap(raw: number): number {
-  for (const pt of SNAP_POINTS) {
-    if (Math.abs(raw - pt.width) <= SNAP_THRESHOLD) return pt.width;
-  }
-  return raw;
-}
-function labelFor(width: number): string | null {
-  return SNAP_POINTS.find((p) => p.width === width)?.label ?? null;
-}
 
 export default function ConversationPage() {
-  const searchParams = useSearchParams();
-  const contactsPath = searchParams.get('contactsPath') || '';
-
   return (
-    <ContactsProvider contactsPath={contactsPath}>
+    <ContactsProvider>
       <ConversationPageInner />
     </ContactsProvider>
   );
@@ -90,7 +83,6 @@ function ConversationPageInner() {
   const chatId = params.id as string;
   const dbPath = searchParams.get('dbPath') || '';
   const attachmentsPath = searchParams.get('attachmentsPath') || '';
-  const contactsPath = searchParams.get('contactsPath') || '';
   const contacts = useContactsOptional();
 
   const getInitialDateFromURL = (paramName: string): Date | null => {
@@ -117,16 +109,24 @@ function ConversationPageInner() {
   const [totalCount, setTotalCount] = useState(0);
   const [conversationDetails, setConversationDetails] = useState<ConversationDetails | null>(null);
   const [columnWidth, setColumnWidth] = useState<number>(DEFAULT_COLUMN_WIDTH);
+  const [screenSize, setScreenSize] = useState<string>(
+    String(DEFAULT_COLUMN_WIDTH),
+  );
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const PAGE_SIZE = 500;
 
   useEffect(() => {
     const saved = localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY);
+    const savedScreenSize = localStorage.getItem(SCREEN_SIZE_STORAGE_KEY);
     if (saved) {
       const n = parseInt(saved, 10);
       if (!Number.isNaN(n) && n >= MIN_COLUMN_WIDTH && n <= MAX_COLUMN_WIDTH) {
         setColumnWidth(n);
+        const isPreset = SNAP_POINTS.some((point) => point.width === n);
+        setScreenSize(
+          savedScreenSize === 'custom' || !isPreset ? 'custom' : String(n),
+        );
       }
     }
   }, []);
@@ -134,6 +134,16 @@ function ConversationPageInner() {
   useEffect(() => {
     localStorage.setItem(COLUMN_WIDTH_STORAGE_KEY, String(columnWidth));
   }, [columnWidth]);
+
+  useEffect(() => {
+    localStorage.setItem(SCREEN_SIZE_STORAGE_KEY, screenSize);
+  }, [screenSize]);
+
+  const handleScreenSizeChange = (value: string) => {
+    setScreenSize(value);
+    if (value === 'custom') return;
+    setColumnWidth(Number(value));
+  };
 
   const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -149,7 +159,7 @@ function ConversationPageInner() {
       MAX_COLUMN_WIDTH,
       Math.max(MIN_COLUMN_WIDTH, dragRef.current.startWidth + delta * 2),
     );
-    setColumnWidth(snap(raw));
+    setColumnWidth(raw);
   };
   const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragRef.current) return;
@@ -157,7 +167,6 @@ function ConversationPageInner() {
     setIsDragging(false);
     (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
   };
-  const currentSnapLabel = labelFor(columnWidth);
 
   const fetchMessages = useCallback(async (pageNum: number, reset: boolean = false) => {
     try {
@@ -276,7 +285,6 @@ function ConversationPageInner() {
         chatId: parseInt(chatId),
         dbPath,
         attachmentsPath,
-        contactsPath,
         startDate: startImessageTimestamp,
         endDate: endImessageTimestamp,
         pageSize: opts.pageSize,
@@ -369,7 +377,7 @@ function ConversationPageInner() {
             ← All conversations
           </Link>
           <Link
-            href={`/contacts?dbPath=${encodeURIComponent(dbPath)}&contactsPath=${encodeURIComponent(contactsPath)}`}
+            href={`/contacts?dbPath=${encodeURIComponent(dbPath)}`}
             className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center"
           >
             Contacts
@@ -391,7 +399,7 @@ function ConversationPageInner() {
           <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
             Participants
           </p>
-          {contactsPath && unresolvedCount > 0 && (
+          {unresolvedCount > 0 && (
             <div className="mb-2 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-800">
               {unresolvedCount} unnamed contact{unresolvedCount === 1 ? '' : 's'} in
               this chat — click the ✎ to name {unresolvedCount === 1 ? 'it' : 'them'}.
@@ -405,17 +413,15 @@ function ConversationPageInner() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-gray-900">{resolved ?? raw}</span>
-                      {contactsPath && (
-                        <span
-                          className={
-                            resolved
-                              ? 'opacity-0 group-hover:opacity-100 transition-opacity'
-                              : 'opacity-100'
-                          }
-                        >
-                          <InlineNameEditor handleId={raw} />
-                        </span>
-                      )}
+                      <span
+                        className={
+                          resolved
+                            ? 'opacity-0 group-hover:opacity-100 transition-opacity'
+                            : 'opacity-100'
+                        }
+                      >
+                        <InlineNameEditor handleId={raw} />
+                      </span>
                     </div>
                     {resolved && (
                       <div className="truncate text-xs text-gray-400 font-mono">{raw}</div>
@@ -427,6 +433,30 @@ function ConversationPageInner() {
           </ul>
         </div>
       )}
+
+      <div className="p-4 border-b border-gray-200">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+            iPhone width
+          </p>
+          <span className="text-[10px] tabular-nums text-gray-400">
+            {columnWidth}px
+          </span>
+        </div>
+        <Select value={screenSize} onValueChange={handleScreenSizeChange}>
+          <SelectTrigger className="h-9 bg-white text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SNAP_POINTS.map((point) => (
+              <SelectItem key={point.width} value={String(point.width)}>
+                {point.label} ({point.width}px)
+              </SelectItem>
+            ))}
+            <SelectItem value="custom">Custom</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="p-4 border-b border-gray-200">
         <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
@@ -459,27 +489,32 @@ function ConversationPageInner() {
       className="mx-auto bg-white flex flex-col h-full w-full shadow-sm relative"
       style={{ maxWidth: `${columnWidth}px` }}
     >
-      {/* Drag handle on the right edge — column is centered so width grows symmetrically. */}
-      <div
-        onPointerDown={startDrag}
-        onPointerMove={onDrag}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        title={`${columnWidth}px${currentSnapLabel ? ` — ${currentSnapLabel}` : ''}`}
-        className="hidden lg:flex absolute top-0 -right-1 h-full w-2 cursor-col-resize group items-center justify-center z-10 select-none touch-none"
-      >
+      {/* Custom mode exposes a persistent resize rail on the column edge. */}
+      {screenSize === 'custom' && (
         <div
-          className={`h-16 w-[3px] rounded-full transition-colors ${
-            isDragging
-              ? 'bg-blue-500 opacity-100'
-              : 'bg-gray-400 opacity-60 group-hover:bg-blue-500 group-hover:opacity-100'
-          }`}
-        />
-      </div>
+          onPointerDown={startDrag}
+          onPointerMove={onDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          title={`Resize custom screen (${columnWidth}px)`}
+          className="group absolute -right-2 top-0 z-10 hidden h-full w-4 cursor-col-resize touch-none select-none items-center justify-center lg:flex"
+        >
+          <div
+            className={`h-full w-px transition-colors ${
+              isDragging ? 'bg-blue-500' : 'bg-blue-300 group-hover:bg-blue-500'
+            }`}
+          />
+          <div
+            className={`absolute h-20 w-1 rounded-full shadow-sm transition-colors ${
+              isDragging ? 'bg-blue-600' : 'bg-blue-500 group-hover:bg-blue-600'
+            }`}
+          />
+        </div>
+      )}
       {/* Floating width readout during drag */}
       {isDragging && (
         <div className="hidden lg:block absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none bg-gray-900 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg">
-          {columnWidth}px{currentSnapLabel ? ` · ${currentSnapLabel}` : ''}
+          {columnWidth}px
         </div>
       )}
       <div id="scrollableDiv" className="flex-1 overflow-y-auto px-3 py-4">

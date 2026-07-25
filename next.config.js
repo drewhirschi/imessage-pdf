@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Keep hot-reload artifacts separate from production/Electron builds.
+  // Without this, `next build` can delete manifests while `next dev` is
+  // serving them, producing intermittent ENOENT errors on refresh.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   // The database layer now uses Node's built-in `node:sqlite`, which is
   // externalized automatically for server code. There is no native module
   // to mark external here anymore (previously: better-sqlite3).

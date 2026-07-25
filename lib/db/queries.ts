@@ -16,7 +16,8 @@ export function getAllConversations(
   phoneNumber?: string,
   handleIds?: string[],
   limit?: number,
-  offset?: number
+  offset?: number,
+  pinnedIdentifiers: string[] = [],
 ): { conversations: ConversationSummary[]; total: number } {
   const db = getDatabase();
 
@@ -65,8 +66,19 @@ export function getAllConversations(
   query += `
     GROUP BY c.ROWID, c.chat_identifier, c.display_name, c.group_id
     HAVING message_count > 0
-    ORDER BY last_message_date DESC
   `;
+
+  if (pinnedIdentifiers.length > 0) {
+    const placeholders = pinnedIdentifiers.map(() => "?").join(",");
+    query += `
+      ORDER BY
+        CASE WHEN c.chat_identifier IN (${placeholders}) THEN 0 ELSE 1 END,
+        last_message_date DESC
+    `;
+    params.push(...pinnedIdentifiers);
+  } else {
+    query += ` ORDER BY last_message_date DESC`;
+  }
 
   // Get total count before applying pagination
   const countQuery = `

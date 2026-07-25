@@ -13,8 +13,9 @@ interface ImageAttachmentProps {
    * - `single`: natural aspect ratio, height-capped so tall portrait
    *   screenshots don't dominate the column.
    * - `cover`: fills a fixed-height cell (used in multi-image grids).
+   * - `link-preview`: stable media region inside a rich-link card.
    */
-  variant?: 'single' | 'cover';
+  variant?: 'single' | 'cover' | 'link-preview';
 }
 
 export default function ImageAttachment({
@@ -31,7 +32,9 @@ export default function ImageAttachment({
   // Only load images when they're near the viewport (kept once loaded).
   const { ref, inView } = useInView({
     triggerOnce: true,
-    rootMargin: '500px',
+    // Start loading well before the image reaches the viewport. The reserved
+    // placeholder below keeps scroll geometry stable while the request runs.
+    rootMargin: '1500px 0px',
   });
 
   const imageUrl = `/api/attachments/${attachmentId}?dbPath=${encodeURIComponent(dbPath)}&attachmentsPath=${encodeURIComponent(attachmentsPath)}`;
@@ -43,8 +46,17 @@ export default function ImageAttachment({
   };
 
   const isCover = variant === 'cover';
+  const isLinkPreview = variant === 'link-preview';
+  const placeholderHeight = isLinkPreview
+    ? '56px'
+    : isCover
+      ? '100%'
+      : '320px';
 
   if (imageError) {
+    if (variant === 'link-preview') {
+      return <div className="size-14 bg-gray-100" aria-hidden />;
+    }
     const basename = filename?.split('/').pop();
     return (
       <div className="bg-gray-100 p-4 text-center h-full flex flex-col items-center justify-center">
@@ -66,16 +78,38 @@ export default function ImageAttachment({
   // The parent (a rounded, overflow-hidden media bubble) owns the corner radius.
   // `single` caps height and keeps aspect; `cover` fills a fixed grid cell.
   const imgClass = isCover
-    ? 'block w-full h-full object-cover'
-    : 'block w-full h-auto';
-  const imgStyle: React.CSSProperties = isCover
-    ? { display: isLoading ? 'none' : 'block' }
-    : { maxHeight: '320px', width: 'auto', display: isLoading ? 'none' : 'block' };
+      ? 'block h-full w-full object-cover'
+      : isLinkPreview
+      ? 'block size-14 object-contain'
+      : 'block h-auto w-full';
+  const imgStyle: React.CSSProperties =
+    isCover || isLinkPreview
+      ? { display: isLoading ? 'none' : 'block' }
+      : {
+          maxHeight: '320px',
+          maxWidth: '260px',
+          width: 'auto',
+          display: isLoading ? 'none' : 'block',
+        };
 
   return (
-    <div ref={ref} className="relative w-full h-full">
+    <div
+      ref={ref}
+      className={`relative ${
+        isLinkPreview
+          ? 'size-14 bg-black/5'
+          : isCover
+            ? 'h-full w-full'
+            : isLoading
+              ? 'min-h-[320px] w-[260px]'
+              : 'w-fit max-w-full'
+      }`}
+    >
       {!inView && (
-        <div className="bg-gray-100 flex items-center justify-center w-full h-full" style={{ minHeight: '120px' }}>
+        <div
+          className="flex h-full w-full items-center justify-center bg-gray-100"
+          style={{ minHeight: placeholderHeight }}
+        >
           <div className="text-sm text-gray-400">Loading...</div>
         </div>
       )}
@@ -83,7 +117,10 @@ export default function ImageAttachment({
       {inView && (
         <>
           {isLoading && (
-            <div className="absolute inset-0 bg-gray-100 flex items-center justify-center" style={{ minHeight: '120px' }}>
+            <div
+              className="absolute inset-0 flex items-center justify-center bg-gray-100"
+              style={{ minHeight: placeholderHeight }}
+            >
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-400"></div>
             </div>
           )}

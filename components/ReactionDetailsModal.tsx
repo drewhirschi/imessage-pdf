@@ -97,7 +97,7 @@ export default function ReactionDetailsModal({
                               {reaction.is_from_me !== 1 &&
                                 reaction.sender_id &&
                                 !resolved &&
-                                contacts?.contactsPath && (
+                                contacts && (
                                   <InlineNameEditor handleId={reaction.sender_id} />
                                 )}
                             </div>
@@ -118,4 +118,3 @@ export default function ReactionDetailsModal({
     </>
   );
 }
-

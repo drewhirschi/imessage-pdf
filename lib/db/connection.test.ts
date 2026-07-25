@@ -29,6 +29,10 @@ describe("connection (node:sqlite adapter)", () => {
 
   it("rejects writes on the read-only handle", () => {
     const db = getDatabase();
+    const pragma = db.prepare("PRAGMA query_only").get() as {
+      query_only: number;
+    };
+    expect(pragma.query_only).toBe(1);
     expect(() => db.prepare("CREATE TABLE zzz (x INTEGER)").run()).toThrow(
       /readonly/i
     );

@@ -6,22 +6,9 @@ import {
 } from "@/lib/contacts/store";
 import type { Contact } from "@/lib/contacts/types";
 
-function requirePath(request: NextRequest): string | NextResponse {
-  const path = new URL(request.url).searchParams.get("path");
-  if (!path) {
-    return NextResponse.json(
-      { error: "Contacts path is required" },
-      { status: 400 }
-    );
-  }
-  return path;
-}
-
-export async function GET(request: NextRequest) {
-  const path = requirePath(request);
-  if (path instanceof NextResponse) return path;
+export async function GET() {
   try {
-    const book = loadBook(path);
+    const book = loadBook();
     return NextResponse.json(book);
   } catch (err) {
     console.error("Failed to load contacts book:", err);
@@ -33,8 +20,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const path = requirePath(request);
-  if (path instanceof NextResponse) return path;
   try {
     const body = (await request.json()) as {
       contacts?: Record<string, Contact>;
@@ -45,7 +30,7 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       );
     }
-    const saved = replaceBook(path, body.contacts);
+    const saved = replaceBook(body.contacts);
     return NextResponse.json(saved);
   } catch (err) {
     console.error("Failed to write contacts book:", err);
@@ -57,8 +42,6 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const path = requirePath(request);
-  if (path instanceof NextResponse) return path;
   try {
     const body = (await request.json()) as { handleId?: string; name?: string };
     if (!body?.handleId) {
@@ -67,7 +50,7 @@ export async function PATCH(request: NextRequest) {
         { status: 400 }
       );
     }
-    const saved = upsertContact(path, body.handleId, body.name ?? "");
+    const saved = upsertContact(body.handleId, body.name ?? "");
     return NextResponse.json(saved);
   } catch (err) {
     console.error("Failed to patch contacts book:", err);

@@ -18,10 +18,7 @@ interface HandleRow {
 function ContactsEditor() {
   const searchParams = useSearchParams();
   const urlDbPath = searchParams.get('dbPath') || '';
-  const urlContactsPath = searchParams.get('contactsPath') || '';
-
   const [dbPath, setDbPath] = useState(urlDbPath);
-  const [contactsPath, setContactsPath] = useState(urlContactsPath);
   const [handles, setHandles] = useState<HandleRow[]>([]);
   const [contacts, setContacts] = useState<Record<string, Contact>>({});
   const [loading, setLoading] = useState(true);
@@ -36,20 +33,16 @@ function ContactsEditor() {
       const fromStorage = localStorage.getItem('imessage-db-path');
       if (fromStorage) setDbPath(fromStorage);
     }
-    if (!contactsPath) {
-      const fromStorage = localStorage.getItem('imessage-contacts-path');
-      if (fromStorage) setContactsPath(fromStorage);
-    }
-  }, [dbPath, contactsPath]);
+  }, [dbPath]);
 
   const load = useCallback(async () => {
-    if (!dbPath || !contactsPath) return;
+    if (!dbPath) return;
     setLoading(true);
     setError(null);
     try {
       const [handlesRes, bookRes] = await Promise.all([
         fetch(`/api/handles?dbPath=${encodeURIComponent(dbPath)}`),
-        fetch(`/api/contacts?path=${encodeURIComponent(contactsPath)}`),
+        fetch('/api/contacts'),
       ]);
       if (!handlesRes.ok) throw new Error('Failed to load handles');
       if (!bookRes.ok) throw new Error('Failed to load contacts');
@@ -62,7 +55,7 @@ function ContactsEditor() {
     } finally {
       setLoading(false);
     }
-  }, [dbPath, contactsPath]);
+  }, [dbPath]);
 
   useEffect(() => {
     load();
@@ -78,7 +71,7 @@ function ContactsEditor() {
         return next;
       });
       try {
-        await fetch(`/api/contacts?path=${encodeURIComponent(contactsPath)}`, {
+        await fetch('/api/contacts', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ handleId, name }),
@@ -95,7 +88,7 @@ function ContactsEditor() {
         setError('Failed to save');
       }
     },
-    [contactsPath],
+    [],
   );
 
   const exportBook = useCallback(() => {
@@ -146,7 +139,7 @@ function ContactsEditor() {
       if (!ok) return;
       try {
         const res = await fetch(
-          `/api/contacts?path=${encodeURIComponent(contactsPath)}`,
+          '/api/contacts',
           {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -162,7 +155,7 @@ function ContactsEditor() {
         );
       }
     },
-    [contacts, contactsPath, load],
+    [contacts, load],
   );
 
   const filtered = useMemo(() => {
@@ -180,12 +173,12 @@ function ContactsEditor() {
 
   const resolvedCount = handles.filter((h) => !!contacts[h.id]?.name).length;
 
-  if (!dbPath || !contactsPath) {
+  if (!dbPath) {
     return (
       <div className="max-w-2xl mx-auto p-6">
         <h1 className="text-2xl font-bold mb-4">Contacts Book</h1>
         <p className="text-gray-600 mb-4">
-          Configure your database and contacts file paths first.
+          Configure your Messages database first.
         </p>
         <Link href="/" className="text-blue-600 hover:text-blue-800 underline">
           ← Back to configuration
@@ -200,8 +193,7 @@ function ContactsEditor() {
         <div>
           <h1 className="text-2xl font-bold">Contacts Book</h1>
           <p className="text-sm text-gray-600 mt-1">
-            {resolvedCount} of {handles.length} handles named. File:{' '}
-            <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">{contactsPath}</code>
+            {resolvedCount} of {handles.length} handles named.
           </p>
         </div>
         <div className="flex items-center gap-3">

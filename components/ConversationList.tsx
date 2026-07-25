@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, X } from 'lucide-react';
+import { ChevronRight, MessageSquare, Pin, Search, Users, X } from 'lucide-react';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import { imessageToDate, formatRelativeTime } from '@/lib/utils/timestamp';
 import { useContactsOptional } from './ContactsProvider';
@@ -17,19 +17,19 @@ interface Conversation {
   last_message_date: number | null;
   message_count: number;
   is_group: boolean;
+  is_pinned: boolean;
 }
 
 interface ConversationListProps {
   dbPath: string;
   attachmentsPath: string;
-  contactsPath?: string;
 }
 
-export default function ConversationList({ dbPath, attachmentsPath, contactsPath }: ConversationListProps) {
+export default function ConversationList({ dbPath, attachmentsPath }: ConversationListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const contacts = useContactsOptional();
-  const contactEntries = contacts?.entries ?? {};
+  const contactEntries = useMemo(() => contacts?.entries ?? {}, [contacts?.entries]);
   
   // Initialize filterText from URL params
   const [filterText, setFilterText] = useState(searchParams.get('phoneNumber') || '');
@@ -40,6 +40,7 @@ export default function ConversationList({ dbPath, attachmentsPath, contactsPath
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
+  const [pinning, setPinning] = useState<Set<string>>(new Set());
   const PAGE_SIZE = 50;
 
   const fetchConversations = useCallback(async (pageNum: number, reset: boolean = false) => {
@@ -131,7 +132,9 @@ export default function ConversationList({ dbPath, attachmentsPath, contactsPath
 
   const formatLastMessage = (message: string | null) => {
     if (!message) return 'No messages';
-    return message.length > 50 ? message.substring(0, 50) + '...' : message;
+    const cleaned = message.replace(/\uFFFC/g, '').trim();
+    if (!cleaned) return 'Attachment';
+    return cleaned.length > 50 ? cleaned.substring(0, 50) + '...' : cleaned;
   };
 
   const formatLastMessageDate = (timestamp: number | null) => {
@@ -140,18 +143,62 @@ export default function ConversationList({ dbPath, attachmentsPath, contactsPath
     return formatRelativeTime(date);
   };
 
+  const togglePin = async (conversation: Conversation) => {
+    const chatIdentifier = conversation.chat_identifier;
+    const pinned = !conversation.is_pinned;
+    const previous = conversations;
+    setPinning((current) => new Set(current).add(chatIdentifier));
+    setConversations((current) =>
+      current
+        .map((item) =>
+          item.chat_identifier === chatIdentifier
+            ? { ...item, is_pinned: pinned }
+            : item,
+        )
+        .sort((a, b) => {
+          if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+          return (b.last_message_date ?? 0) - (a.last_message_date ?? 0);
+        }),
+    );
+
+    try {
+      const response = await fetch('/api/conversation-pins', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dbPath, chatIdentifier, pinned }),
+      });
+      if (!response.ok) throw new Error('Failed to update pin');
+    } catch (err) {
+      setConversations(previous);
+      setError(err instanceof Error ? err.message : 'Failed to update pin');
+    } finally {
+      setPinning((current) => {
+        const next = new Set(current);
+        next.delete(chatIdentifier);
+        return next;
+      });
+    }
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2 text-gray-600">Loading conversations...</span>
+      <div className="overflow-hidden rounded-md border border-[#dfe2e5] bg-white">
+        {[0, 1, 2, 3, 4, 5].map((row) => (
+          <div key={row} className="flex h-[76px] animate-pulse items-center gap-3 border-b border-[#eceeef] px-4 last:border-0">
+            <div className="size-10 rounded-full bg-[#edf0f2]" />
+            <div className="flex-1">
+              <div className="h-3.5 w-36 rounded bg-[#e7e9eb]" />
+              <div className="mt-2 h-3 w-2/3 rounded bg-[#f0f1f2]" />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+      <div className="rounded-md border border-red-200 bg-red-50 p-4">
         <h3 className="text-sm font-medium text-red-800">Error Loading Conversations</h3>
         <p className="text-sm text-red-600 mt-1">{error}</p>
         <button
@@ -164,7 +211,7 @@ export default function ConversationList({ dbPath, attachmentsPath, contactsPath
     );
   }
 
-  if (conversations.length === 0) {
+  if (conversations.length === 0 && !filterText) {
     return (
       <div className="text-center py-8">
         <p className="text-gray-500">No conversations found.</p>
@@ -173,36 +220,37 @@ export default function ConversationList({ dbPath, attachmentsPath, contactsPath
   }
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-gray-900">
-        Your Conversations ({totalCount > 0 ? totalCount : conversations.length}{filterText ? ' filtered' : ''})
-      </h2>
-
-      {/* Filter Input */}
-      <div className="relative">
+    <div>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="relative max-w-2xl flex-1">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search className="h-5 w-5 text-gray-400" />
+          <Search className="size-4 text-[#81868b]" />
         </div>
         <input
           type="text"
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
-          placeholder="Filter by name or phone…"
-          className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+          placeholder="Search names, numbers, or messages"
+          className="block h-9 w-full rounded-md border border-[#cfd3d7] bg-white pl-9 pr-9 text-sm text-[#303236] outline-none transition focus:border-[#1473e6] focus:ring-2 focus:ring-[#1473e6]/15"
         />
         {filterText && (
           <button
             onClick={() => setFilterText('')}
-            className="absolute inset-y-0 right-0 pr-3 flex items-center hover:text-gray-700"
+            aria-label="Clear search"
+            className="absolute inset-y-0 right-0 flex items-center pr-3 hover:text-gray-700"
           >
-            <X className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+            <X className="size-4 text-gray-400 hover:text-gray-600" />
           </button>
         )}
+        </div>
+        <span className="shrink-0 text-xs tabular-nums text-[#777c82]">
+          {totalCount > 0 ? totalCount.toLocaleString() : conversations.length.toLocaleString()}
+          {filterText ? ' matches' : ' threads'}
+        </span>
       </div>
 
-      {/* Conversation List */}
       {conversations.length === 0 && filterText && !loading ? (
-        <div className="text-center py-8">
+        <div className="rounded-md border border-[#dfe2e5] bg-white py-14 text-center">
           <p className="text-gray-500">No conversations match your filter.</p>
           <button
             onClick={() => setFilterText('')}
@@ -230,7 +278,7 @@ export default function ConversationList({ dbPath, attachmentsPath, contactsPath
             ) : null
           }
         >
-          <div className="space-y-2">
+          <div className="overflow-hidden rounded-md border border-[#dfe2e5] bg-white shadow-[0_1px_2px_rgba(32,33,36,0.04)]">
             {conversations.map((conversation) => {
               const resolvedParticipants = conversation.participants.map(
                 (p) => contacts?.resolve(p) ?? p,
@@ -244,48 +292,69 @@ export default function ConversationList({ dbPath, attachmentsPath, contactsPath
               const href = new URLSearchParams({
                 dbPath,
                 attachmentsPath,
-                ...(contactsPath ? { contactsPath } : {}),
               });
               return (
-                <Link
+                <div
                   key={conversation.chat_id}
-                  href={`/conversation/${conversation.chat_id}?${href.toString()}`}
-                  className="block bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                  className="group relative border-b border-[#eceeef] last:border-0 hover:bg-[#f7f9fb]"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2">
-                        <h3 className="text-sm font-medium text-gray-900 truncate">
-                          {primary}
-                        </h3>
-                        {conversation.is_group && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                            Group
-                          </span>
-                        )}
+                  <Link
+                    href={`/conversation/${conversation.chat_id}?${href.toString()}`}
+                    className="flex min-h-[76px] items-center gap-3 px-4 py-3 pr-14 transition-colors"
+                  >
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#edf3fa] text-[#1473e6]">
+                      {conversation.is_group ? (
+                        <Users className="size-[18px]" />
+                      ) : (
+                        <MessageSquare className="size-[18px]" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline justify-between gap-4">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <h3 className="truncate text-sm font-semibold text-[#292b2e]">
+                            {primary}
+                          </h3>
+                          {conversation.is_group && (
+                            <span className="inline-flex shrink-0 items-center rounded bg-[#f0f1f2] px-1.5 py-0.5 text-[10px] font-medium text-[#656a70]">
+                              Group
+                            </span>
+                          )}
+                        </div>
+                        <span className="shrink-0 text-xs text-[#777c82]">
+                          {formatLastMessageDate(conversation.last_message_date)}
+                        </span>
                       </div>
-
-                      <p className="text-sm text-gray-600 mt-1 truncate">
-                        {conversation.participants.length > 1
-                          ? `${conversation.participants.length} participants — ${resolvedParticipants.join(', ')}`
-                          : resolvedParticipants[0] || 'Unknown'}
-                      </p>
-
-                      <p className="text-sm text-gray-500 mt-1 truncate">
-                        {formatLastMessage(conversation.last_message)}
-                      </p>
+                      <div className="mt-1 flex items-center justify-between gap-5">
+                        <p className="truncate text-sm text-[#6c7177]">
+                          {formatLastMessage(conversation.last_message)}
+                        </p>
+                        <div className="flex shrink-0 items-center gap-3 text-[11px] tabular-nums text-[#969a9e]">
+                          <span>{conversation.message_count.toLocaleString()} messages</span>
+                          <ChevronRight className="size-4 text-[#b0b4b8] transition-transform group-hover:translate-x-0.5 group-hover:text-[#1473e6]" />
+                        </div>
+                      </div>
                     </div>
-
-                    <div className="flex flex-col items-end space-y-1 ml-4">
-                      <span className="text-xs text-gray-500">
-                        {formatLastMessageDate(conversation.last_message_date)}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {conversation.message_count} messages
-                      </span>
-                    </div>
-                  </div>
-                </Link>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => togglePin(conversation)}
+                    disabled={pinning.has(conversation.chat_identifier)}
+                    title={conversation.is_pinned ? 'Unpin conversation' : 'Pin conversation'}
+                    aria-label={conversation.is_pinned ? `Unpin ${primary}` : `Pin ${primary}`}
+                    aria-pressed={conversation.is_pinned}
+                    className={`absolute right-3 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md transition ${
+                      conversation.is_pinned
+                        ? 'text-[#1473e6] opacity-100'
+                        : 'text-[#8a8f94] opacity-0 hover:bg-[#e9edf2] hover:text-[#1473e6] focus-visible:opacity-100 group-hover:opacity-100'
+                    } disabled:opacity-40`}
+                  >
+                    <Pin
+                      className="size-4"
+                      fill={conversation.is_pinned ? 'currentColor' : 'none'}
+                    />
+                  </button>
+                </div>
               );
             })}
           </div>

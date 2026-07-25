@@ -14,6 +14,8 @@ interface LinkCardProps {
   forPrint?: boolean;
   /** Extra classes merged onto the card root (e.g. the tail corner). */
   className?: string;
+  /** Archived preview image stored as a message attachment by iMessage. */
+  previewImage?: React.ReactNode;
 }
 
 /**
@@ -29,6 +31,7 @@ export default function LinkCard({
   isFromMe,
   forPrint = false,
   className = '',
+  previewImage,
 }: LinkCardProps) {
   const domain = displayDomain(url);
   const title = rich?.title?.trim();
@@ -48,14 +51,20 @@ export default function LinkCard({
     >
       {/* Header strip: domain monogram + site name, evokes the LP header row. */}
       <div className="flex items-stretch gap-2.5 px-3 py-2.5">
-        <div
-          className={`flex-shrink-0 self-center w-9 h-9 rounded-lg flex items-center justify-center text-[15px] font-semibold ${
-            isFromMe ? 'bg-white/20 text-white' : 'bg-white text-[#007AFF]'
-          }`}
-          aria-hidden
-        >
-          {domain.charAt(0).toUpperCase()}
-        </div>
+        {previewImage ? (
+          <div className="size-14 flex-shrink-0 self-center overflow-hidden rounded-[10px] bg-white/90">
+            {previewImage}
+          </div>
+        ) : (
+          <div
+            className={`flex size-9 flex-shrink-0 self-center items-center justify-center rounded-lg text-[15px] font-semibold ${
+              isFromMe ? 'bg-white/20 text-white' : 'bg-white text-[#007AFF]'
+            }`}
+            aria-hidden
+          >
+            {domain.charAt(0).toUpperCase()}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           {title ? (
             <>

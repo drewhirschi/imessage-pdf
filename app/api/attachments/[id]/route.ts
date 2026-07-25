@@ -4,6 +4,7 @@ import { getAttachmentPath } from "@/lib/db/queries";
 import fs from "fs";
 import path from "path";
 import convert from "heic-convert";
+import { inlineContentDisposition } from "@/lib/http/content-disposition";
 
 export async function GET(
   request: NextRequest,
@@ -124,7 +125,7 @@ export async function GET(
     return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
         "Content-Type": contentType,
-        "Content-Disposition": `inline; filename="${filename}"`,
+        "Content-Disposition": inlineContentDisposition(filename),
       },
     });
   } catch (error) {

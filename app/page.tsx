@@ -1,18 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { AlertTriangle, Database, FolderOpen } from 'lucide-react';
 import PathConfiguration from '@/components/PathConfiguration';
 import ConversationList from '@/components/ConversationList';
 import FullDiskAccessScreen from '@/components/FullDiskAccessScreen';
 import { ContactsProvider } from '@/components/ContactsProvider';
 import PageChrome from '@/components/PageChrome';
 
-const DEFAULT_CONTACTS_PATH = '~/.imessage-pdf/contacts.json';
-
 const DB_KEY = 'imessage-db-path';
 const ATT_KEY = 'imessage-attachments-path';
-const CONTACTS_KEY = 'imessage-contacts-path';
 
 type Phase = 'loading' | 'ready' | 'permission' | 'manual';
 
@@ -34,15 +31,13 @@ export default function HomePage() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [dbPath, setDbPath] = useState('');
   const [attachmentsPath, setAttachmentsPath] = useState('');
-  const [contactsPath, setContactsPath] = useState('');
   const [autoDetected, setAutoDetected] = useState(false);
   const [health, setHealth] = useState<HealthResponse | null>(null);
 
   const goReady = useCallback(
-    (db: string, att: string, contacts: string, detected: boolean) => {
+    (db: string, att: string, detected: boolean) => {
       setDbPath(db);
       setAttachmentsPath(att);
-      setContactsPath(contacts);
       setAutoDetected(detected);
       setPhase('ready');
     },
@@ -57,15 +52,11 @@ export default function HomePage() {
       const h = (await res.json()) as HealthResponse;
       setHealth(h);
 
-      const contacts =
-        localStorage.getItem(CONTACTS_KEY) || DEFAULT_CONTACTS_PATH;
-
       if (h.overall === 'ok') {
         // Found + readable: save silently, straight to conversations.
         localStorage.setItem(DB_KEY, h.resolved.dbPath);
         localStorage.setItem(ATT_KEY, h.resolved.attachmentsPath);
-        localStorage.setItem(CONTACTS_KEY, contacts);
-        goReady(h.resolved.dbPath, h.resolved.attachmentsPath, contacts, true);
+        goReady(h.resolved.dbPath, h.resolved.attachmentsPath, true);
       } else if (h.db.status === 'permission_denied') {
         setPhase('permission');
       } else {
@@ -81,10 +72,8 @@ export default function HomePage() {
   useEffect(() => {
     const savedDb = localStorage.getItem(DB_KEY);
     const savedAtt = localStorage.getItem(ATT_KEY);
-    const savedContacts =
-      localStorage.getItem(CONTACTS_KEY) || DEFAULT_CONTACTS_PATH;
     if (savedDb && savedAtt) {
-      goReady(savedDb, savedAtt, savedContacts, false);
+      goReady(savedDb, savedAtt, false);
       // Background re-probe: saved paths can go stale (FDA revoked, db
       // moved). Route to the right screen instead of a raw fetch error.
       fetch(
@@ -104,8 +93,8 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handlePathsSet = (db: string, att: string, contacts: string) => {
-    goReady(db, att, contacts, false);
+  const handlePathsSet = (db: string, att: string) => {
+    goReady(db, att, false);
   };
 
   const handleChange = () => {
@@ -145,13 +134,17 @@ export default function HomePage() {
       </>
     ) : undefined;
     content = (
-      <div className="space-y-6">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            iMessage PDF Exporter
+      <div className="mx-auto max-w-2xl pt-5">
+        <div className="mb-7">
+          <div className="mb-3 flex size-10 items-center justify-center rounded-lg border border-[#cbdcf1] bg-[#eef5fd] text-[#1473e6]">
+            <FolderOpen className="size-5" />
+          </div>
+          <h1 className="text-2xl font-semibold text-[#202124]">
+            Locate your Messages data
           </h1>
-          <p className="text-lg text-gray-600">
-            Export your iMessage conversations to beautiful, printable PDFs
+          <p className="mt-2 max-w-xl text-sm leading-6 text-[#656a70]">
+            Choose your Messages folder or a copied backup. Your archive stays
+            on this Mac and is opened read-only.
           </p>
         </div>
         <PathConfiguration
@@ -165,63 +158,49 @@ export default function HomePage() {
   } else {
     // ready
     content = (
-      <div className="space-y-6">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between gap-4">
-          <p className="text-sm text-green-800 min-w-0">
-            Using database at{' '}
-            <code className="text-xs bg-white/70 px-1 py-0.5 rounded break-all">
-              {dbPath}
-            </code>
-            {autoDetected && (
-              <span className="text-green-600"> (auto-detected)</span>
-            )}
-          </p>
-          <button
-            onClick={handleChange}
-            className="text-sm text-green-700 hover:text-green-900 underline whitespace-nowrap"
-          >
-            Change
-          </button>
+      <div>
+        <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+          <div>
+            <div className="mb-1.5 flex items-center gap-2 text-xs font-medium text-[#1b8f55]">
+              <Database className="size-3.5" />
+              Database connected{autoDetected ? ' automatically' : ''}
+            </div>
+            <h1 className="text-[22px] font-semibold text-[#202124]">
+              Conversations
+            </h1>
+            <p className="mt-1 text-sm text-[#6b7075]">
+              Find a thread, review its messages, then export the range you need.
+            </p>
+          </div>
         </div>
 
         {health?.db.status === 'ok' &&
           health.attachments.status === 'not_found' && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-800">
-              Attachments folder not found at{' '}
-              <code className="text-xs bg-white/70 px-1 py-0.5 rounded break-all">
-                {health.attachments.path}
-              </code>{' '}
-              — messages will load, but images and files won&apos;t.
+            <div className="mb-5 flex gap-3 rounded-md border border-[#e9c46a] bg-[#fff9e8] px-4 py-3 text-sm text-[#775b14]">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <span>
+                The attachment folder is unavailable. Messages will load, but
+                images and files may be missing.
+              </span>
             </div>
           )}
-
-        <div className="flex justify-end gap-4">
-          <Link
-            href={`/diagnostics?dbPath=${encodeURIComponent(dbPath)}&attachmentsPath=${encodeURIComponent(attachmentsPath)}`}
-            className="text-sm text-blue-600 hover:text-blue-800 underline"
-          >
-            Database health →
-          </Link>
-          <Link
-            href={`/contacts?dbPath=${encodeURIComponent(dbPath)}&contactsPath=${encodeURIComponent(contactsPath)}`}
-            className="text-sm text-blue-600 hover:text-blue-800 underline"
-          >
-            Edit contacts book →
-          </Link>
-        </div>
 
         <ConversationList
           dbPath={dbPath}
           attachmentsPath={attachmentsPath}
-          contactsPath={contactsPath}
         />
       </div>
     );
   }
 
   return (
-    <ContactsProvider contactsPath={contactsPath}>
-      <PageChrome>{content}</PageChrome>
+    <ContactsProvider>
+      <PageChrome
+        databasePath={phase === 'ready' ? dbPath : undefined}
+        onChangeDatabase={phase === 'ready' ? handleChange : undefined}
+      >
+        {content}
+      </PageChrome>
     </ContactsProvider>
   );
 }

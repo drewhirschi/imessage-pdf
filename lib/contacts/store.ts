@@ -1,13 +1,16 @@
-import fs from "fs";
-import path from "path";
-import { homedir } from "os";
+import fs from "node:fs";
+import path from "node:path";
+import { homedir } from "node:os";
+import { getAppDatabase } from "@/lib/app-db/connection";
 import { EMPTY_BOOK, type Contact, type ContactsBook } from "./types";
 
-const cache = new Map<string, { book: ContactsBook; mtimeMs: number }>();
+let migrationChecked = false;
 
-function expandPath(raw: string): string {
-  if (raw.startsWith("~")) return path.join(homedir(), raw.slice(1));
-  return raw;
+function getLegacyContactsPath(): string {
+  return (
+    process.env.IMESSAGE_PDF_LEGACY_CONTACTS_PATH ??
+    path.join(homedir(), ".imessage-pdf", "contacts.json")
+  );
 }
 
 function normalizeHandle(h: string): string {
@@ -15,35 +18,50 @@ function normalizeHandle(h: string): string {
   return h.replace(/\D/g, "");
 }
 
-export function loadBook(rawPath: string | null | undefined): ContactsBook {
-  if (!rawPath) return EMPTY_BOOK;
-  const p = expandPath(rawPath);
+function importLegacyContactsOnce(): void {
+  if (migrationChecked) return;
+  migrationChecked = true;
+
+  const db = getAppDatabase();
+  const row = db.prepare("SELECT COUNT(*) AS count FROM contacts").get() as {
+    count: number;
+  };
+  const legacyPath = getLegacyContactsPath();
+  if (Number(row.count) > 0 || !fs.existsSync(legacyPath)) return;
+
   try {
-    const stat = fs.statSync(p);
-    const hit = cache.get(p);
-    if (hit && hit.mtimeMs === stat.mtimeMs) return hit.book;
-    const raw = fs.readFileSync(p, "utf8");
-    const parsed = JSON.parse(raw) as ContactsBook;
-    if (!parsed || typeof parsed !== "object" || !parsed.contacts) {
-      return EMPTY_BOOK;
+    const parsed = JSON.parse(
+      fs.readFileSync(legacyPath, "utf8"),
+    ) as ContactsBook;
+    if (!parsed?.contacts || typeof parsed.contacts !== "object") return;
+
+    const insert = db.prepare(
+      "INSERT OR IGNORE INTO contacts (handle_id, name, note) VALUES (?, ?, ?)",
+    );
+    for (const [handleId, contact] of Object.entries(parsed.contacts)) {
+      if (!contact?.name?.trim()) continue;
+      insert.run(handleId, contact.name.trim(), contact.note ?? null);
     }
-    cache.set(p, { book: parsed, mtimeMs: stat.mtimeMs });
-    return parsed;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return EMPTY_BOOK;
-    console.error("Failed to load contacts book:", err);
-    return EMPTY_BOOK;
+  } catch (error) {
+    console.error("Failed to import legacy contacts book:", error);
   }
 }
 
-export function saveBook(rawPath: string, book: ContactsBook): void {
-  const p = expandPath(rawPath);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = p + ".tmp";
-  fs.writeFileSync(tmp, JSON.stringify(book, null, 2), "utf8");
-  fs.renameSync(tmp, p);
-  const stat = fs.statSync(p);
-  cache.set(p, { book, mtimeMs: stat.mtimeMs });
+export function loadBook(): ContactsBook {
+  importLegacyContactsOnce();
+  const rows = getAppDatabase()
+    .prepare("SELECT handle_id, name, note FROM contacts ORDER BY handle_id")
+    .all() as Array<{ handle_id: string; name: string; note: string | null }>;
+  if (rows.length === 0) return EMPTY_BOOK;
+
+  const contacts: Record<string, Contact> = {};
+  for (const row of rows) {
+    contacts[row.handle_id] = {
+      name: row.name,
+      ...(row.note ? { note: row.note } : {}),
+    };
+  }
+  return { version: 1, contacts };
 }
 
 export interface Resolver {
@@ -71,42 +89,59 @@ export function buildResolver(book: ContactsBook): Resolver {
     },
     resolve(handleId) {
       if (!handleId) return null;
-      return (
-        exact.get(handleId) ?? norm.get(normalizeHandle(handleId)) ?? null
-      );
+      return exact.get(handleId) ?? norm.get(normalizeHandle(handleId)) ?? null;
     },
   };
 }
 
-export function getResolver(rawPath: string | null | undefined): Resolver {
-  return buildResolver(loadBook(rawPath));
+export function getResolver(): Resolver {
+  return buildResolver(loadBook());
 }
 
 export function upsertContact(
-  rawPath: string,
   handleId: string,
-  name: string
+  name: string,
 ): ContactsBook {
-  const book = loadBook(rawPath);
-  const contacts: Record<string, Contact> = { ...book.contacts };
+  const db = getAppDatabase();
   const trimmed = name.trim();
   if (!trimmed) {
-    delete contacts[handleId];
+    db.prepare("DELETE FROM contacts WHERE handle_id = ?").run(handleId);
   } else {
-    contacts[handleId] = { ...contacts[handleId], name: trimmed };
+    db.prepare(
+      `INSERT INTO contacts (handle_id, name, updated_at)
+       VALUES (?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(handle_id) DO UPDATE SET
+         name = excluded.name,
+         updated_at = CURRENT_TIMESTAMP`,
+    ).run(handleId, trimmed);
   }
-  const next: ContactsBook = { version: 1, contacts };
-  saveBook(rawPath, next);
-  return next;
+  return loadBook();
 }
 
 export function replaceBook(
-  rawPath: string,
-  contacts: Record<string, Contact>
+  contacts: Record<string, Contact>,
 ): ContactsBook {
-  const next: ContactsBook = { version: 1, contacts };
-  saveBook(rawPath, next);
-  return next;
+  const db = getAppDatabase();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.exec("DELETE FROM contacts");
+    const insert = db.prepare(
+      "INSERT INTO contacts (handle_id, name, note) VALUES (?, ?, ?)",
+    );
+    for (const [handleId, contact] of Object.entries(contacts)) {
+      if (!contact?.name?.trim()) continue;
+      insert.run(handleId, contact.name.trim(), contact.note ?? null);
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return loadBook();
+}
+
+export function resetContactsMigrationForTests(): void {
+  migrationChecked = false;
 }
 
 export { normalizeHandle };

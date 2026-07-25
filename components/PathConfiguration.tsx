@@ -5,7 +5,7 @@ import FileExplorer from './FileExplorer';
 import { FileExplorerMode } from '@/lib/types/file-system';
 
 interface PathConfigurationProps {
-  onPathsSet: (dbPath: string, attachmentsPath: string, contactsPath: string) => void;
+  onPathsSet: (dbPath: string, attachmentsPath: string) => void;
   /** Prefill the db path input (e.g. with the auto-detected default). */
   initialDbPath?: string;
   /** Prefill the attachments path input. */
@@ -13,8 +13,6 @@ interface PathConfigurationProps {
   /** Optional hint rendered above the form (what we looked for and didn't find). */
   hint?: ReactNode;
 }
-
-const DEFAULT_CONTACTS_PATH = '~/.imessage-pdf/contacts.json';
 
 export default function PathConfiguration({
   onPathsSet,
@@ -24,27 +22,22 @@ export default function PathConfiguration({
 }: PathConfigurationProps) {
   const [dbPath, setDbPath] = useState(initialDbPath);
   const [attachmentsPath, setAttachmentsPath] = useState(initialAttachmentsPath);
-  const [contactsPath, setContactsPath] = useState(DEFAULT_CONTACTS_PATH);
   const [isConfigured, setIsConfigured] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [fileExplorerOpen, setFileExplorerOpen] = useState(false);
   const [fileExplorerMode, setFileExplorerMode] = useState<FileExplorerMode>('file');
-  const [fileExplorerTarget, setFileExplorerTarget] = useState<'db' | 'attachments' | 'contacts'>('db');
+  const [fileExplorerTarget, setFileExplorerTarget] = useState<'db' | 'attachments'>('db');
   const dbFileInputRef = useRef<HTMLInputElement>(null);
   const attachmentsFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const savedDbPath = localStorage.getItem('imessage-db-path');
     const savedAttachmentsPath = localStorage.getItem('imessage-attachments-path');
-    const savedContactsPath = localStorage.getItem('imessage-contacts-path');
-
     if (savedDbPath && savedAttachmentsPath) {
       setDbPath(savedDbPath);
       setAttachmentsPath(savedAttachmentsPath);
-      const contacts = savedContactsPath || DEFAULT_CONTACTS_PATH;
-      setContactsPath(contacts);
       setIsConfigured(true);
-      onPathsSet(savedDbPath, savedAttachmentsPath, contacts);
+      onPathsSet(savedDbPath, savedAttachmentsPath);
     }
   }, [onPathsSet]);
 
@@ -77,20 +70,17 @@ export default function PathConfiguration({
     setSaveError(null);
     localStorage.setItem('imessage-db-path', resolvedDb);
     localStorage.setItem('imessage-attachments-path', resolvedAtt);
-    localStorage.setItem('imessage-contacts-path', contactsPath || DEFAULT_CONTACTS_PATH);
     setDbPath(resolvedDb);
     setAttachmentsPath(resolvedAtt);
     setIsConfigured(true);
-    onPathsSet(resolvedDb, resolvedAtt, contactsPath || DEFAULT_CONTACTS_PATH);
+    onPathsSet(resolvedDb, resolvedAtt);
   };
 
   const handleReset = () => {
     localStorage.removeItem('imessage-db-path');
     localStorage.removeItem('imessage-attachments-path');
-    localStorage.removeItem('imessage-contacts-path');
     setDbPath('');
     setAttachmentsPath('');
-    setContactsPath(DEFAULT_CONTACTS_PATH);
     setIsConfigured(false);
   };
 
@@ -106,19 +96,11 @@ export default function PathConfiguration({
     setFileExplorerOpen(true);
   };
 
-  const handleContactsFileSelect = () => {
-    setFileExplorerMode('file');
-    setFileExplorerTarget('contacts');
-    setFileExplorerOpen(true);
-  };
-
   const handleFileExplorerSelect = (path: string) => {
     if (fileExplorerTarget === 'db') {
       setDbPath(path);
     } else if (fileExplorerTarget === 'attachments') {
       setAttachmentsPath(path);
-    } else {
-      setContactsPath(path);
     }
     setFileExplorerOpen(false);
   };
@@ -153,8 +135,7 @@ export default function PathConfiguration({
             <h3 className="text-sm font-medium text-green-800">Configuration Complete</h3>
             <p className="text-sm text-green-600 mt-1">
               Database: {dbPath}<br />
-              Attachments: {attachmentsPath}<br />
-              Contacts: {contactsPath}
+              Attachments: {attachmentsPath}
             </p>
           </div>
           <button
@@ -278,41 +259,6 @@ export default function PathConfiguration({
           </div>
           <p className="text-xs text-gray-500 mt-1">
             Typically located at ~/Library/Messages/Attachments on macOS
-          </p>
-        </div>
-
-        <div>
-          <label htmlFor="contactsPath" className="block text-sm font-medium text-gray-700 mb-1">
-            Contacts File (JSON)
-          </label>
-          <div className="flex space-x-2">
-            <input
-              type="text"
-              id="contactsPath"
-              value={contactsPath}
-              onChange={(e) => setContactsPath(e.target.value)}
-              placeholder={DEFAULT_CONTACTS_PATH}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <button
-              type="button"
-              onClick={handleContactsFileSelect}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Browse Files
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2 mt-2">
-            <button
-              type="button"
-              onClick={() => setContactsPath(DEFAULT_CONTACTS_PATH)}
-              className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
-            >
-              Default
-            </button>
-          </div>
-          <p className="text-xs text-gray-500 mt-1">
-            Maps phone numbers and emails to names. Created automatically on first edit.
           </p>
         </div>
 

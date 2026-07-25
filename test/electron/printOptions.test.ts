@@ -66,7 +66,6 @@ describe('buildPrintUrl', () => {
       chatId: 42,
       dbPath: '/db/chat.db',
       attachmentsPath: '/att',
-      contactsPath: '/c.json',
       startDate: 100,
       endDate: 200,
       columnWidthPx: 390,
@@ -75,7 +74,6 @@ describe('buildPrintUrl', () => {
     expect(parsed.pathname).toBe('/conversation/42/print');
     expect(parsed.searchParams.get('dbPath')).toBe('/db/chat.db');
     expect(parsed.searchParams.get('attachmentsPath')).toBe('/att');
-    expect(parsed.searchParams.get('contactsPath')).toBe('/c.json');
     expect(parsed.searchParams.get('startDate')).toBe('100');
     expect(parsed.searchParams.get('endDate')).toBe('200');
     expect(parsed.searchParams.get('columnWidth')).toBe('390');
@@ -86,7 +84,6 @@ describe('buildPrintUrl', () => {
     const parsed = new URL(url);
     expect(parsed.searchParams.get('columnWidth')).toBe('430');
     expect(parsed.searchParams.has('startDate')).toBe(false);
-    expect(parsed.searchParams.has('contactsPath')).toBe(false);
   });
 });
 

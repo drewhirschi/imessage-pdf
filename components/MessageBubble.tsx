@@ -128,6 +128,11 @@ export default function MessageBubble({
   // Partition attachments; images can collage into a grid, everything else is
   // its own bubble in the stack (iMessage behaviour).
   const images = attachments.filter((a) => classifyAttachment(a) === 'image');
+  // iMessage archives rich-link artwork as the first regular image
+  // attachment. Keep it inside the link card instead of rendering a detached
+  // media bubble above the card.
+  const linkPreviewImage = richLink ? images[0] : undefined;
+  const bubbleImages = linkPreviewImage ? images.slice(1) : images;
   const nonImages = attachments.filter((a) => classifyAttachment(a) !== 'image');
 
   // Build the vertical stack of bubbles (media/cards on top, text below).
@@ -136,21 +141,21 @@ export default function MessageBubble({
   const stack: Array<{ key: string; render: (tail: string) => React.ReactNode }> = [];
 
   // 1) Images — single media bubble, or a 2-up collage.
-  if (images.length === 1) {
+  if (bubbleImages.length === 1) {
     stack.push({
       key: 'img',
       render: (tail) => (
-        <div className={`message-bubble-item overflow-hidden rounded-[18px] ${tail} bg-black/5 max-w-[260px]`}>
+        <div className={`message-bubble-item max-w-[260px] overflow-hidden rounded-[18px] ${tail}`}>
           <ImageAttachment
-            attachmentId={images[0].ROWID}
-            filename={images[0].filename}
+            attachmentId={bubbleImages[0].ROWID}
+            filename={bubbleImages[0].filename}
             dbPath={dbPath}
             attachmentsPath={attachmentsPath}
           />
         </div>
       ),
     });
-  } else if (images.length > 1) {
+  } else if (bubbleImages.length > 1) {
     stack.push({
       key: 'imggrid',
       render: (tail) => (
@@ -158,7 +163,7 @@ export default function MessageBubble({
           className={`message-bubble-item grid grid-cols-2 gap-[2px] overflow-hidden rounded-[18px] ${tail} bg-black/5`}
           style={{ width: 248 }}
         >
-          {images.map((img) => (
+          {bubbleImages.map((img) => (
             <div key={img.ROWID} className="aspect-square overflow-hidden">
               <ImageAttachment
                 attachmentId={img.ROWID}
@@ -233,6 +238,17 @@ export default function MessageBubble({
           isFromMe={isFromMe}
           forPrint={forPrint}
           className={`message-bubble-item ${tail}`}
+          previewImage={
+            linkPreviewImage ? (
+              <ImageAttachment
+                attachmentId={linkPreviewImage.ROWID}
+                filename={linkPreviewImage.filename}
+                dbPath={dbPath}
+                attachmentsPath={attachmentsPath}
+                variant="link-preview"
+              />
+            ) : undefined
+          }
         />
       ),
     });
@@ -277,7 +293,7 @@ export default function MessageBubble({
       {showSenderLabel && !isFromMe && (
         <div className="px-3 mb-0.5 flex items-center gap-1">
           <span className="text-[12px] text-[#8E8E93]">{senderName}</span>
-          {rawSender && !resolved && contacts?.contactsPath && (
+          {rawSender && !resolved && contacts && (
             <InlineNameEditor handleId={rawSender} />
           )}
         </div>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db/connection";
 import { getAllConversations } from "@/lib/db/queries";
+import { listPinnedConversations } from "@/lib/app-db/conversation-pins";
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,15 +27,21 @@ export async function GET(request: NextRequest) {
       ? handleIdsRaw.split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
 
+    const pinnedIdentifiers = listPinnedConversations(dbPath);
+    const pinnedSet = new Set(pinnedIdentifiers);
     const result = getAllConversations(
       phoneNumber || undefined,
       handleIds,
       limit,
-      offset
+      offset,
+      pinnedIdentifiers,
     );
 
     return NextResponse.json({
-      conversations: result.conversations,
+      conversations: result.conversations.map((conversation) => ({
+        ...conversation,
+        is_pinned: pinnedSet.has(conversation.chat_identifier),
+      })),
       total: result.total,
       page,
       limit,

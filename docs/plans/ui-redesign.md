@@ -34,7 +34,7 @@ opens like an app, finds your data itself, one nav bar, polished shadcn look.
 - Adopt **shadcn/ui** (Tailwind is already in place; add the CLI, tokens, and the
   components we actually use: button, input, card, dialog, dropdown, tooltip,
   popover, badge, table, tabs, skeleton, sonner for toasts).
-- **App shell with a top nav bar**: Conversations · Contacts · Database health,
+- **App shell with a top nav bar**: Conversations · Contacts · Stats,
   plus a settings affordance (change data folder). Replaces the random corner
   links. Active-route highlighting. The db-location banner collapses into a small
   status chip in the nav ("Using Messages database ✓" / warning state) with a

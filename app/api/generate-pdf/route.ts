@@ -36,7 +36,6 @@ interface PDFBody {
   chatId: number | string;
   dbPath: string;
   attachmentsPath: string;
-  contactsPath?: string;
   startDate?: number | string | null;
   endDate?: number | string | null;
   // From PDFOptionsDialog
@@ -66,7 +65,6 @@ export async function POST(request: NextRequest) {
       chatId,
       dbPath,
       attachmentsPath,
-      contactsPath,
       startDate,
       endDate,
       marginIn = 0.5,
@@ -93,7 +91,6 @@ export async function POST(request: NextRequest) {
     const printUrl = new URL(`/conversation/${chatId}/print`, origin);
     printUrl.searchParams.set('dbPath', dbPath);
     printUrl.searchParams.set('attachmentsPath', attachmentsPath);
-    if (contactsPath) printUrl.searchParams.set('contactsPath', contactsPath);
     if (startDate != null) printUrl.searchParams.set('startDate', String(startDate));
     if (endDate != null) printUrl.searchParams.set('endDate', String(endDate));
     printUrl.searchParams.set('columnWidth', String(columnWidthPx));

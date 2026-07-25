@@ -35,11 +35,11 @@ To inspect the DB directly: `sqlite3 -readonly /home/drew/work/hannah-imessage/c
 - `POST /api/generate-pdf` — renders a conversation to PDF via `@react-pdf/renderer`, streams the response. Accepts optional `contactsPath` in body to resolve phone numbers to names.
 - `GET /api/file-system?path` — breadth-first directory listing for the path picker UI.
 - `GET /api/handles?dbPath` — all unique handles in the DB with message count + last-seen, used by the contacts editor.
-- `GET|PUT|PATCH /api/contacts?path` — contacts book CRUD. `PUT` replaces the whole book, `PATCH {handleId, name}` upserts (empty name deletes).
+- `GET|PUT|PATCH /api/contacts` — app-owned contacts CRUD. `PUT` replaces the whole book, `PATCH {handleId, name}` upserts (empty name deletes).
 
 ### Data layer (`lib/db/`)
 
-- `connection.ts` — lazy singleton `node:sqlite` (`DatabaseSync`) connection, opened read-only. A thin adapter exposes a better-sqlite3-shaped `prepare().get()/.all()/.run()` API so `queries.ts` and the routes are unchanged. It enables `setReadBigInts(true)` and coerces the returned BigInts back to `Number` at the boundary, because `node:sqlite` otherwise **throws `ERR_OUT_OF_RANGE`** on iMessage's out-of-safe-range nanosecond dates; the Number coercion reproduces better-sqlite3's default (lossy) read behavior exactly.
+- `connection.ts` — lazy singleton `node:sqlite` (`DatabaseSync`) connection, opened with `readOnly: true` and `PRAGMA query_only = ON`. A thin adapter exposes a better-sqlite3-shaped `prepare().get()/.all()/.run()` API so `queries.ts` and the routes are unchanged. It enables `setReadBigInts(true)` and coerces the returned BigInts back to `Number` at the boundary, because `node:sqlite` otherwise **throws `ERR_OUT_OF_RANGE`** on iMessage's out-of-safe-range nanosecond dates; the Number coercion reproduces better-sqlite3's default (lossy) read behavior exactly.
 - `queries.ts` — all SQL lives here. Key functions: `getAllConversations`, `getMessagesForConversation`, `getConversationDetails`, `getAttachmentPath`. Reactions are pulled in the same query and grouped by message GUID; reaction type codes **2000–2005** map to `heart | thumbs_up | thumbs_down | laugh | emphasize | question`.
 - `types.ts` — `Chat`, `Message`, `Handle`, `Attachment` (raw schema); `ConversationSummary`, `MessageWithAttachments`, `Reaction` (view models).
 
@@ -65,7 +65,7 @@ iMessage stores dates as **nanoseconds since 2001-01-01 UTC**. Unix epoch is 197
 
 ## Handles / contacts
 
-Handles in `chat.db` are raw identifiers (phone number or email). Name resolution flows through a JSON contacts book (default `~/.imessage-pdf/contacts.json`), keyed by raw handle with a normalized phone-digits fallback. Server-side resolver lives in `lib/contacts/store.ts`; client-side provider is `components/ContactsProvider.tsx`. Every UI that shows a sender (`ConversationList`, `MessageBubble`, `ReactionDetailsModal`, conversation sidebar) reads through `useContacts().resolve()`. Inline rename uses `InlineNameEditor`; the full editor is at `/contacts`. The plan that drove this is `docs/plans/completed/contacts.md`.
+Handles in `chat.db` are raw identifiers (phone number or email). Name resolution uses the `contacts` table in the writable app database at `~/.imessage-pdf/app.db`, keyed by raw handle with a normalized phone-digits fallback. `~/.imessage-pdf/contacts.json` is imported once when the table is initially empty and is retained as a backup. Server-side storage lives in `lib/contacts/store.ts`; the separate writable connection and schema live in `lib/app-db/connection.ts`. The client provider is `components/ContactsProvider.tsx`. There is no user-selectable contacts path.
 
 ## VCard attachments
 

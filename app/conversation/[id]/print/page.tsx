@@ -18,10 +18,8 @@ const FETCH_PAGE_SIZE = 500;
 // Puppeteer's print-to-PDF. Reuses MessageList so visual output matches the
 // live viewer 1:1.
 export default function PrintPage() {
-  const searchParams = useSearchParams();
-  const contactsPath = searchParams.get('contactsPath') || '';
   return (
-    <ContactsProvider contactsPath={contactsPath}>
+    <ContactsProvider>
       <PrintPageInner />
     </ContactsProvider>
   );

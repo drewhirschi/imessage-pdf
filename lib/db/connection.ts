@@ -84,6 +84,9 @@ export function connectToDatabase(dbPath: string): DbHandle {
 
   try {
     const database = new DatabaseSync(dbPath, { readOnly: true });
+    // Defense in depth: readOnly prevents filesystem writes at open time;
+    // query_only also makes SQLite reject writes issued through this handle.
+    database.exec("PRAGMA query_only = ON");
     db = wrap(database);
     connectedPath = dbPath;
     return db;

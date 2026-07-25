@@ -14,7 +14,7 @@ export default function InlineNameEditor({
   trigger,
   size = 'sm',
 }: InlineNameEditorProps) {
-  const { entries, setName, contactsPath } = useContacts();
+  const { entries, setName } = useContacts();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(entries[handleId]?.name ?? '');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -32,8 +32,6 @@ export default function InlineNameEditor({
     setOpen(false);
   };
 
-  const disabled = !contactsPath;
-
   if (!open) {
     return (
       <button
@@ -41,17 +39,12 @@ export default function InlineNameEditor({
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          if (!disabled) setOpen(true);
+          setOpen(true);
         }}
-        title={
-          disabled
-            ? 'Set a contacts file in path configuration first'
-            : 'Add or edit name'
-        }
-        disabled={disabled}
+        title="Add or edit name"
         className={`${
           size === 'sm' ? 'text-xs' : 'text-sm'
-        } text-gray-400 hover:text-blue-600 disabled:opacity-30 disabled:hover:text-gray-400`}
+        } text-gray-400 hover:text-blue-600`}
       >
         {trigger ?? '✎'}
       </button>

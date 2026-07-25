@@ -69,7 +69,6 @@ function buildPrintUrl(origin, body = {}) {
   const url = new URL(`/conversation/${chatId}/print`, origin);
   if (body.dbPath) url.searchParams.set('dbPath', body.dbPath);
   if (body.attachmentsPath) url.searchParams.set('attachmentsPath', body.attachmentsPath);
-  if (body.contactsPath) url.searchParams.set('contactsPath', body.contactsPath);
   if (body.startDate != null) url.searchParams.set('startDate', String(body.startDate));
   if (body.endDate != null) url.searchParams.set('endDate', String(body.endDate));
   const columnWidth = body.columnWidthPx != null ? body.columnWidthPx : 430;
