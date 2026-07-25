@@ -34,10 +34,10 @@ export default function ImageAttachment({
     triggerOnce: true,
     // Start loading well before the image reaches the viewport. The reserved
     // placeholder below keeps scroll geometry stable while the request runs.
-    rootMargin: '1500px 0px',
+    rootMargin: '3000px 0px',
   });
 
-  const imageUrl = `/api/attachments/${attachmentId}?dbPath=${encodeURIComponent(dbPath)}&attachmentsPath=${encodeURIComponent(attachmentsPath)}`;
+  const imageUrl = `/api/attachments/${attachmentId}?dbPath=${encodeURIComponent(dbPath)}&attachmentsPath=${encodeURIComponent(attachmentsPath)}&preview=1`;
 
   const handleRetry = () => {
     setImageError(false);

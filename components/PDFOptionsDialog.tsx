@@ -28,9 +28,10 @@ export interface PDFOptions {
   columnWidthPx: number;
 }
 
-export type PageSizeKey = 'Letter' | 'Legal' | 'A4' | 'Tabloid' | 'Custom';
+export type PageSizeKey = 'A5' | 'Letter' | 'Legal' | 'A4' | 'Tabloid' | 'Custom';
 
 const PRESETS: Record<Exclude<PageSizeKey, 'Custom'>, { w: number; h: number }> = {
+  A5: { w: 5.83, h: 8.27 },
   Letter: { w: 8.5, h: 11 },
   Legal: { w: 8.5, h: 14 },
   A4: { w: 8.27, h: 11.69 },
@@ -52,9 +53,9 @@ export default function PDFOptionsDialog({
   onSubmit,
   submitting,
 }: Props) {
-  const [pageSize, setPageSize] = useState<PageSizeKey>('Letter');
-  const [customW, setCustomW] = useState<number>(8.5);
-  const [customH, setCustomH] = useState<number>(11);
+  const [pageSize, setPageSize] = useState<PageSizeKey>('A5');
+  const [customW, setCustomW] = useState<number>(5.83);
+  const [customH, setCustomH] = useState<number>(8.27);
   const [marginIn, setMarginIn] = useState<number>(0.5);
   const [columnWidthPx, setColumnWidthPx] = useState<number>(defaultColumnWidthPx);
 
@@ -89,6 +90,9 @@ export default function PDFOptionsDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="A5">
+                  A5 Print Book (5.83 × 8.27 in / 148 × 210 mm)
+                </SelectItem>
                 <SelectItem value="Letter">Letter (8.5 × 11 in)</SelectItem>
                 <SelectItem value="Legal">Legal (8.5 × 14 in)</SelectItem>
                 <SelectItem value="A4">A4 (8.27 × 11.69 in)</SelectItem>
@@ -150,6 +154,24 @@ export default function PDFOptionsDialog({
             />
             <p className="text-xs text-muted-foreground">
               iPhone-ish widths look best: 390–430 px.
+            </p>
+          </div>
+
+          <div className="border-t pt-3 text-xs leading-5 text-muted-foreground">
+            <p className="font-medium text-foreground">Print recommendation</p>
+            <p>
+              A5 with Color, 80# White — Coated paper, Hardcover Case Wrap,
+              and a Matte Cover produced a result I really liked. I printed it
+              with{' '}
+              <a
+                href="https://www.lulu.com/account/projects/zmewv97"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-700"
+              >
+                Lulu
+              </a>{' '}
+              and had no problems with the service.
             </p>
           </div>
         </div>

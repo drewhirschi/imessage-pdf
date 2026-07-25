@@ -15,6 +15,7 @@ import { classifyMessage } from '@/lib/link-preview/classify';
 import type { RichLink } from '@/lib/link-preview/decode';
 import { useContactsOptional } from './ContactsProvider';
 import type { Reaction } from '@/lib/db/types';
+import QRCodeSVG from './QRCode';
 
 interface Message {
   ROWID: number;
@@ -258,20 +259,43 @@ export default function MessageBubble({
   if (showTextBubble) {
     stack.push({
       key: 'text',
-      render: (tail) => (
-        <div
-          className={`message-bubble-item rounded-[18px] ${tail} px-3 py-[6px] text-[15px] leading-[20px] ${
-            isFromMe ? 'bg-[#007AFF] text-white' : 'bg-[#E9E9EB] text-black'
-          }`}
-          style={{
-            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif',
-          }}
-        >
-          <p className="whitespace-pre-wrap break-words">
-            {renderTextWithLinks(cleanText!, isFromMe)}
-          </p>
-        </div>
-      ),
+      render: (tail) => {
+        const bubble = (
+          <div
+            className={`message-bubble-item rounded-[18px] ${tail} px-3 py-[6px] text-[15px] leading-[20px] ${
+              isFromMe ? 'bg-[#007AFF] text-white' : 'bg-[#E9E9EB] text-black'
+            }`}
+            style={{
+              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif',
+            }}
+          >
+            <p className="whitespace-pre-wrap break-words">
+              {renderTextWithLinks(cleanText!, isFromMe)}
+            </p>
+          </div>
+        );
+
+        if (!forPrint || shape.urls.length === 0) return bubble;
+        const codes = (
+          <div className="flex flex-col gap-1 self-center">
+            {shape.urls.map((url) => (
+              <QRCodeSVG
+                key={url}
+                value={url}
+                size={52}
+                wrapperClassName="rounded-md bg-white p-1"
+              />
+            ))}
+          </div>
+        );
+        return (
+          <div className="flex items-center gap-2">
+            {isFromMe && codes}
+            {bubble}
+            {!isFromMe && codes}
+          </div>
+        );
+      },
     });
   }
 

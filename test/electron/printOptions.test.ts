@@ -32,9 +32,9 @@ describe('mapPrintOptions', () => {
     });
   });
 
-  it('defaults to Letter with 0.5in margins when nothing is given', () => {
+  it('defaults to A5 with 0.5in margins when nothing is given', () => {
     const out = mapPrintOptions({});
-    expect(out.pageSize).toBe('Letter');
+    expect(out.pageSize).toBe('A5');
     expect(out.margins.top).toBe(0.5);
   });
 
@@ -51,12 +51,12 @@ describe('mapPrintOptions', () => {
 
   it('falls back to sane Custom defaults on invalid dimensions', () => {
     const out = mapPrintOptions({ pageSize: 'Custom', customWidthIn: 0, customHeightIn: -3 });
-    expect(out.pageSize).toEqual({ width: inchesToMicrons(8.5), height: inchesToMicrons(11) });
+    expect(out.pageSize).toEqual({ width: inchesToMicrons(5.83), height: inchesToMicrons(8.27) });
   });
 
-  it('falls back to Letter for an unknown page size', () => {
+  it('falls back to A5 for an unknown page size', () => {
     const out = mapPrintOptions({ pageSize: 'Poster' as never });
-    expect(out.pageSize).toBe('Letter');
+    expect(out.pageSize).toBe('A5');
   });
 });
 

@@ -3,7 +3,7 @@
 // of any Electron import so it is unit-testable under vitest/Node.
 //
 // Electron printToPDF semantics (v30+):
-//   - pageSize: a named string ('Letter' | 'Legal' | 'A4' | 'Tabloid' | ...)
+//   - pageSize: a named string ('A5' | 'Letter' | 'Legal' | 'A4' | 'Tabloid' | ...)
 //     OR a { width, height } object measured in MICRONS.
 //   - margins:  { marginType, top, bottom, left, right } with the edge values
 //     measured in INCHES.
@@ -12,7 +12,7 @@
 const MICRONS_PER_INCH = 25400;
 
 // Named sizes Electron understands directly. 'Custom' is handled via microns.
-const NAMED_SIZES = new Set(['Letter', 'Legal', 'A4', 'Tabloid']);
+const NAMED_SIZES = new Set(['A5', 'Letter', 'Legal', 'A4', 'Tabloid']);
 
 function inchesToMicrons(inches) {
   return Math.round(inches * MICRONS_PER_INCH);
@@ -20,26 +20,26 @@ function inchesToMicrons(inches) {
 
 /**
  * @param {object} body The parsed /api/generate-pdf request body.
- * @param {'Letter'|'Legal'|'A4'|'Tabloid'|'Custom'} [body.pageSize]
+ * @param {'A5'|'Letter'|'Legal'|'A4'|'Tabloid'|'Custom'} [body.pageSize]
  * @param {number} [body.customWidthIn]
  * @param {number} [body.customHeightIn]
  * @param {number} [body.marginIn]
  * @returns {{ printBackground: boolean, pageSize: (string|{width:number,height:number}), margins: {marginType:string, top:number, bottom:number, left:number, right:number} }}
  */
 function mapPrintOptions(body = {}) {
-  const size = body.pageSize ?? 'Letter';
+  const size = body.pageSize ?? 'A5';
   const marginIn = typeof body.marginIn === 'number' ? body.marginIn : 0.5;
 
   let pageSize;
   if (size === 'Custom') {
-    const w = typeof body.customWidthIn === 'number' && body.customWidthIn > 0 ? body.customWidthIn : 8.5;
-    const h = typeof body.customHeightIn === 'number' && body.customHeightIn > 0 ? body.customHeightIn : 11;
+    const w = typeof body.customWidthIn === 'number' && body.customWidthIn > 0 ? body.customWidthIn : 5.83;
+    const h = typeof body.customHeightIn === 'number' && body.customHeightIn > 0 ? body.customHeightIn : 8.27;
     pageSize = { width: inchesToMicrons(w), height: inchesToMicrons(h) };
   } else if (NAMED_SIZES.has(size)) {
     pageSize = size;
   } else {
-    // Unknown value — fall back to Letter rather than throw.
-    pageSize = 'Letter';
+    // Unknown value — fall back to the app's print-book default rather than throw.
+    pageSize = 'A5';
   }
 
   return {

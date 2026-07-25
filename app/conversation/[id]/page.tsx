@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 
 interface Message {
   ROWID: number;
@@ -61,6 +62,7 @@ const MIN_COLUMN_WIDTH = 320;
 const MAX_COLUMN_WIDTH = 820;
 const COLUMN_WIDTH_STORAGE_KEY = 'imessage-column-width';
 const SCREEN_SIZE_STORAGE_KEY = 'imessage-screen-size';
+const QR_PREVIEW_STORAGE_KEY = 'imessage-preview-qr-codes';
 const SNAP_POINTS: { width: number; label: string }[] = [
   { width: 375, label: 'iPhone SE' },
   { width: 390, label: 'iPhone 12 / 13 / 14' },
@@ -112,6 +114,7 @@ function ConversationPageInner() {
   const [screenSize, setScreenSize] = useState<string>(
     String(DEFAULT_COLUMN_WIDTH),
   );
+  const [previewQrCodes, setPreviewQrCodes] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const PAGE_SIZE = 500;
@@ -119,6 +122,7 @@ function ConversationPageInner() {
   useEffect(() => {
     const saved = localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY);
     const savedScreenSize = localStorage.getItem(SCREEN_SIZE_STORAGE_KEY);
+    setPreviewQrCodes(localStorage.getItem(QR_PREVIEW_STORAGE_KEY) === 'true');
     if (saved) {
       const n = parseInt(saved, 10);
       if (!Number.isNaN(n) && n >= MIN_COLUMN_WIDTH && n <= MAX_COLUMN_WIDTH) {
@@ -138,6 +142,10 @@ function ConversationPageInner() {
   useEffect(() => {
     localStorage.setItem(SCREEN_SIZE_STORAGE_KEY, screenSize);
   }, [screenSize]);
+
+  useEffect(() => {
+    localStorage.setItem(QR_PREVIEW_STORAGE_KEY, String(previewQrCodes));
+  }, [previewQrCodes]);
 
   const handleScreenSizeChange = (value: string) => {
     setScreenSize(value);
@@ -458,6 +466,20 @@ function ConversationPageInner() {
         </Select>
       </div>
 
+      <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-4">
+        <label
+          htmlFor="preview-qr-codes"
+          className="text-xs font-medium text-gray-700"
+        >
+          Preview QR codes
+        </label>
+        <Switch
+          id="preview-qr-codes"
+          checked={previewQrCodes}
+          onCheckedChange={setPreviewQrCodes}
+        />
+      </div>
+
       <div className="p-4 border-b border-gray-200">
         <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
           Date range
@@ -553,6 +575,7 @@ function ConversationPageInner() {
                 isGroup={isGroup}
                 dbPath={dbPath}
                 attachmentsPath={attachmentsPath}
+                forPrint={previewQrCodes}
               />
             </SwipeForTimestamps>
           </InfiniteScroll>

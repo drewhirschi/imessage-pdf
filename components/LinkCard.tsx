@@ -40,6 +40,13 @@ export default function LinkCard({
   const cardBg = isFromMe ? 'bg-[#0063d1]' : 'bg-[#dedee0]';
   const titleColor = isFromMe ? 'text-white' : 'text-black';
   const metaColor = isFromMe ? 'text-white/70' : 'text-[#8E8E93]';
+  const printQr = forPrint ? (
+    <QRCodeSVG
+      value={url}
+      size={56}
+      wrapperClassName="flex-shrink-0 self-center bg-white p-1 rounded-md"
+    />
+  ) : null;
 
   return (
     <a
@@ -51,6 +58,7 @@ export default function LinkCard({
     >
       {/* Header strip: domain monogram + site name, evokes the LP header row. */}
       <div className="flex items-stretch gap-2.5 px-3 py-2.5">
+        {isFromMe && printQr}
         {previewImage ? (
           <div className="size-14 flex-shrink-0 self-center overflow-hidden rounded-[10px] bg-white/90">
             {previewImage}
@@ -82,13 +90,7 @@ export default function LinkCard({
             </>
           )}
         </div>
-        {forPrint && (
-          <QRCodeSVG
-            value={url}
-            size={64}
-            wrapperClassName="flex-shrink-0 self-center bg-white p-1 rounded-md"
-          />
-        )}
+        {!isFromMe && printQr}
       </div>
     </a>
   );

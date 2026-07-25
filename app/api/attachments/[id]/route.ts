@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import convert from "heic-convert";
 import { inlineContentDisposition } from "@/lib/http/content-disposition";
+import { getImagePreview } from "@/lib/attachments/image-preview";
 
 export async function GET(
   request: NextRequest,
@@ -14,6 +15,7 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const dbPath = searchParams.get("dbPath");
     const attachmentsPath = searchParams.get("attachmentsPath");
+    const preview = searchParams.get("preview") === "1";
 
     if (!dbPath || !attachmentsPath) {
       return NextResponse.json(
@@ -64,9 +66,29 @@ export async function GET(
     const ext = path.extname(filename).toLowerCase();
     let contentType = "application/octet-stream";
     let fileBuffer: Buffer;
+    const previewableExtensions = new Set([
+      ".heic",
+      ".heif",
+      ".jpg",
+      ".jpeg",
+      ".png",
+      ".webp",
+      ".pluginpayloadattachment",
+    ]);
 
-    // Convert HEIC/HEIF images to JPEG
-    if (ext === ".heic" || ext === ".heif") {
+    if (preview && previewableExtensions.has(ext)) {
+      try {
+        fileBuffer = await getImagePreview(fullPath, ext);
+        contentType = "image/webp";
+      } catch (error) {
+        console.error("Error generating image preview:", error);
+        return NextResponse.json(
+          { error: "Failed to generate image preview" },
+          { status: 500 }
+        );
+      }
+    // Convert full-size HEIC/HEIF images to JPEG.
+    } else if (ext === ".heic" || ext === ".heif") {
       try {
         const inputBuffer = fs.readFileSync(fullPath);
         const outputBuffer = await convert({
@@ -126,6 +148,7 @@ export async function GET(
       headers: {
         "Content-Type": contentType,
         "Content-Disposition": inlineContentDisposition(filename),
+        "Cache-Control": "private, max-age=31536000, immutable",
       },
     });
   } catch (error) {

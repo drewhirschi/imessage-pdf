@@ -39,7 +39,7 @@ interface PDFBody {
   startDate?: number | string | null;
   endDate?: number | string | null;
   // From PDFOptionsDialog
-  pageSize?: 'Letter' | 'Legal' | 'A4' | 'Tabloid' | 'Custom';
+  pageSize?: 'A5' | 'Letter' | 'Legal' | 'A4' | 'Tabloid' | 'Custom';
   customWidthIn?: number;
   customHeightIn?: number;
   marginIn?: number;
@@ -47,11 +47,11 @@ interface PDFBody {
 }
 
 function pageDimensions(body: PDFBody): { format?: PaperFormat; width?: string; height?: string } {
-  const size = body.pageSize ?? 'Letter';
+  const size = body.pageSize ?? 'A5';
   if (size === 'Custom') {
     return {
-      width: `${body.customWidthIn ?? 8.5}in`,
-      height: `${body.customHeightIn ?? 11}in`,
+      width: `${body.customWidthIn ?? 5.83}in`,
+      height: `${body.customHeightIn ?? 8.27}in`,
     };
   }
   return { format: size as PaperFormat };
