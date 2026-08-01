@@ -8,24 +8,28 @@ import {
   UI,
   type DayPickerProps,
 } from "react-day-picker"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
 function Calendar({ className, classNames, ...props }: DayPickerProps) {
+  const usesDropdownCaption = props.captionLayout?.startsWith("dropdown") ?? false
   return (
     <DayPicker
-      className={cn("p-3", className)}
+      className={cn("relative p-3", className)}
       classNames={{
-        [UI.Months]: "flex flex-col",
+        [UI.Months]: "flex flex-col gap-4 sm:flex-row",
         [UI.Month]: "space-y-4",
         [UI.MonthCaption]: "relative flex h-7 items-center justify-center",
-        [UI.CaptionLabel]: "text-sm font-medium",
-        [UI.Nav]: "absolute inset-x-3 top-3 flex items-center justify-between",
+        [UI.CaptionLabel]: usesDropdownCaption ? "hidden" : "text-sm font-medium",
+        [UI.Dropdowns]: "flex w-[164px] items-center justify-center gap-2",
+        [UI.DropdownRoot]: "relative w-[78px] rounded-md border bg-background",
+        [UI.Dropdown]: "h-7 w-full cursor-pointer bg-transparent px-2 text-xs font-medium outline-none",
+        [UI.Nav]: "absolute inset-x-3 top-3 z-10 flex items-center justify-between pointer-events-none",
         [UI.PreviousMonthButton]:
-          "inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
+          "pointer-events-auto inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
         [UI.NextMonthButton]:
-          "inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
+          "pointer-events-auto inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
         [UI.MonthGrid]: "w-full border-collapse",
         [UI.Weekdays]: "flex",
         [UI.Weekday]:
@@ -48,12 +52,14 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
         ...classNames,
       }}
       components={{
-        Chevron: ({ orientation }) =>
-          orientation === "left" ? (
-            <ChevronLeft className="size-4" />
-          ) : (
-            <ChevronRight className="size-4" />
-          ),
+        Chevron: ({ orientation, className }) => {
+          const Icon = orientation === "left"
+            ? ChevronLeft
+            : orientation === "down"
+              ? ChevronDown
+              : ChevronRight
+          return <Icon className={cn("size-4", className)} />
+        },
       }}
       {...props}
     />

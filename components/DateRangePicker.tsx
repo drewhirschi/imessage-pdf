@@ -32,32 +32,51 @@ export default function DateRangePicker({
   initialEndDate = null,
   compact = false,
 }: DateRangePickerProps) {
-  const initialRange: DateRange | undefined = initialStartDate
-    ? { from: initialStartDate, to: initialEndDate ?? undefined }
-    : undefined;
-  const [temporary, setTemporary] = useState<DateRange | undefined>(initialRange);
-  const [applied, setApplied] = useState<DateRange | undefined>(initialRange);
+  const [temporaryStart, setTemporaryStart] = useState<Date | undefined>(
+    initialStartDate ?? undefined,
+  );
+  const [temporaryEnd, setTemporaryEnd] = useState<Date | undefined>(
+    initialEndDate ?? undefined,
+  );
+  const [appliedStart, setAppliedStart] = useState<Date | undefined>(
+    initialStartDate ?? undefined,
+  );
+  const [appliedEnd, setAppliedEnd] = useState<Date | undefined>(
+    initialEndDate ?? undefined,
+  );
+  const [startView, setStartView] = useState(initialStartDate ?? new Date());
+  const [endView, setEndView] = useState(initialEndDate ?? new Date());
   const [open, setOpen] = useState(false);
 
   const hasChanges =
-    !sameDate(temporary?.from, applied?.from) ||
-    !sameDate(temporary?.to, applied?.to);
-  const hasSelection = !!temporary?.from;
+    !sameDate(temporaryStart, appliedStart) ||
+    !sameDate(temporaryEnd, appliedEnd);
+  const hasSelection = !!temporaryStart || !!temporaryEnd;
+  const hasCompleteRange =
+    !!temporaryStart && !!temporaryEnd && temporaryEnd >= temporaryStart;
+  const selectedRange: DateRange | undefined = temporaryStart
+    ? { from: temporaryStart, to: temporaryEnd }
+    : undefined;
 
-  const label = temporary?.from
-    ? temporary.to
-      ? `${format(temporary.from, 'MMM d, yyyy')} – ${format(temporary.to, 'MMM d, yyyy')}`
-      : `${format(temporary.from, 'MMM d, yyyy')} – Pick end date`
+  const label = temporaryStart
+    ? temporaryEnd
+      ? `${format(temporaryStart, 'MMM d, yyyy')} – ${format(temporaryEnd, 'MMM d, yyyy')}`
+      : `${format(temporaryStart, 'MMM d, yyyy')} – Pick end date`
     : 'Select date range';
 
   const applyDates = () => {
-    setApplied(temporary);
-    onDateRangeChange(temporary?.from ?? null, temporary?.to ?? null);
+    if (!hasCompleteRange) return;
+    setAppliedStart(temporaryStart);
+    setAppliedEnd(temporaryEnd);
+    onDateRangeChange(temporaryStart ?? null, temporaryEnd ?? null);
+    setOpen(false);
   };
 
   const clearDates = () => {
-    setTemporary(undefined);
-    setApplied(undefined);
+    setTemporaryStart(undefined);
+    setTemporaryEnd(undefined);
+    setAppliedStart(undefined);
+    setAppliedEnd(undefined);
     onDateRangeChange(null, null);
   };
 
@@ -79,20 +98,53 @@ export default function DateRangePicker({
             className="h-auto min-h-9 w-full justify-start whitespace-normal px-2.5 py-2 text-left text-xs font-normal"
           >
             <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
-            <span className={cn(!temporary?.from && 'text-muted-foreground')}>
+            <span className={cn(!temporaryStart && 'text-muted-foreground')}>
               {label}
             </span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            autoFocus
-            mode="range"
-            defaultMonth={temporary?.from}
-            selected={temporary}
-            onSelect={setTemporary}
-            numberOfMonths={1}
-          />
+        <PopoverContent className="w-auto max-w-[calc(100vw-2rem)] overflow-x-auto p-0" align="start">
+          <div className="grid grid-cols-2 divide-x">
+            <div>
+              <div className="border-b bg-gray-50 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Start</p>
+                <p className="mt-0.5 text-sm font-medium text-foreground">
+                  {temporaryStart ? format(temporaryStart, 'MMM d, yyyy') : 'Select a day'}
+                </p>
+              </div>
+              <Calendar
+                autoFocus
+                mode="range"
+                captionLayout="dropdown"
+                startMonth={new Date(2001, 0)}
+                endMonth={new Date()}
+                month={startView}
+                onMonthChange={setStartView}
+                selected={selectedRange}
+                disabled={temporaryEnd ? { after: temporaryEnd } : undefined}
+                onDayClick={(day) => setTemporaryStart(day)}
+              />
+            </div>
+            <div>
+              <div className="border-b bg-gray-50 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">End</p>
+                <p className="mt-0.5 text-sm font-medium text-foreground">
+                  {temporaryEnd ? format(temporaryEnd, 'MMM d, yyyy') : 'Select a day'}
+                </p>
+              </div>
+              <Calendar
+                mode="range"
+                captionLayout="dropdown"
+                startMonth={new Date(2001, 0)}
+                endMonth={new Date()}
+                month={endView}
+                onMonthChange={setEndView}
+                selected={selectedRange}
+                disabled={temporaryStart ? { before: temporaryStart } : undefined}
+                onDayClick={(day) => setTemporaryEnd(day)}
+              />
+            </div>
+          </div>
         </PopoverContent>
       </Popover>
 
@@ -109,7 +161,7 @@ export default function DateRangePicker({
         <Button
           size="sm"
           onClick={applyDates}
-          disabled={!hasSelection || !hasChanges}
+          disabled={!hasCompleteRange || !hasChanges}
           className="flex-1"
         >
           Apply

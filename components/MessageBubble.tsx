@@ -11,7 +11,10 @@ import ReactionIndicator from './ReactionIndicator';
 import ReactionDetailsModal from './ReactionDetailsModal';
 import InlineNameEditor from './InlineNameEditor';
 import { imessageToDate } from '@/lib/utils/timestamp';
-import { classifyMessage } from '@/lib/link-preview/classify';
+import {
+  classifyMessage,
+  isRichLinkPreviewAsset,
+} from '@/lib/link-preview/classify';
 import type { RichLink } from '@/lib/link-preview/decode';
 import { useContactsOptional } from './ContactsProvider';
 import type { Reaction } from '@/lib/db/types';
@@ -129,11 +132,16 @@ export default function MessageBubble({
   // Partition attachments; images can collage into a grid, everything else is
   // its own bubble in the stack (iMessage behaviour).
   const images = attachments.filter((a) => classifyAttachment(a) === 'image');
-  // iMessage archives rich-link artwork as the first regular image
-  // attachment. Keep it inside the link card instead of rendering a detached
-  // media bubble above the card.
-  const linkPreviewImage = richLink ? images[0] : undefined;
-  const bubbleImages = linkPreviewImage ? images.slice(1) : images;
+  // Rich links can archive multiple pieces of artwork (for example a hero
+  // image and a compact icon). They all belong to the card; rendering the
+  // unused assets as ordinary media creates a duplicate image above it.
+  const linkPreviewAssets = richLink
+    ? images.filter((image) => isRichLinkPreviewAsset(image.filename))
+    : [];
+  const linkPreviewImage = linkPreviewAssets[0];
+  const bubbleImages = richLink
+    ? images.filter((image) => !isRichLinkPreviewAsset(image.filename))
+    : images;
   const nonImages = attachments.filter((a) => classifyAttachment(a) !== 'image');
 
   // Build the vertical stack of bubbles (media/cards on top, text below).
@@ -232,12 +240,12 @@ export default function MessageBubble({
   if (linkUrl) {
     stack.push({
       key: 'link',
-      render: (tail) => (
-        <LinkCard
+      render: (tail) => {
+        const card = (
+          <LinkCard
           url={linkUrl}
           rich={richLink}
           isFromMe={isFromMe}
-          forPrint={forPrint}
           className={`message-bubble-item ${tail}`}
           previewImage={
             linkPreviewImage ? (
@@ -250,8 +258,24 @@ export default function MessageBubble({
               />
             ) : undefined
           }
-        />
-      ),
+          />
+        );
+        if (!forPrint) return card;
+        const code = (
+          <QRCodeSVG
+            value={linkUrl}
+            size={56}
+            wrapperClassName="flex-shrink-0 self-center rounded-md bg-white p-1"
+          />
+        );
+        return (
+          <div className="flex items-center gap-2">
+            {isFromMe && code}
+            {card}
+            {!isFromMe && code}
+          </div>
+        );
+      },
     });
   }
 

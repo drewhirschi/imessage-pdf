@@ -2,7 +2,6 @@
 
 import { displayDomain } from '@/lib/link-preview/classify';
 import type { RichLink } from '@/lib/link-preview/decode';
-import QRCodeSVG from './QRCode';
 
 interface LinkCardProps {
   url: string;
@@ -10,8 +9,6 @@ interface LinkCardProps {
   rich?: RichLink | null;
   /** Sent bubbles get a subtle tint; received cards stay light. */
   isFromMe: boolean;
-  /** Print/PDF render: append a scannable QR code. */
-  forPrint?: boolean;
   /** Extra classes merged onto the card root (e.g. the tail corner). */
   className?: string;
   /** Archived preview image stored as a message attachment by iMessage. */
@@ -23,13 +20,13 @@ interface LinkCardProps {
  * above/instead of the text bubble). No network fetches: the title/site name
  * come from the decoded LPLinkMetadata (payload_data); otherwise we show a
  * clean domain-prominent card. In the print route it also carries a QR code so
- * the link survives on paper.
+ * the link survives on paper. QR placement is owned by MessageBubble so it
+ * can sit in the inner gutter instead of changing the card layout.
  */
 export default function LinkCard({
   url,
   rich,
   isFromMe,
-  forPrint = false,
   className = '',
   previewImage,
 }: LinkCardProps) {
@@ -40,14 +37,6 @@ export default function LinkCard({
   const cardBg = isFromMe ? 'bg-[#0063d1]' : 'bg-[#dedee0]';
   const titleColor = isFromMe ? 'text-white' : 'text-black';
   const metaColor = isFromMe ? 'text-white/70' : 'text-[#8E8E93]';
-  const printQr = forPrint ? (
-    <QRCodeSVG
-      value={url}
-      size={56}
-      wrapperClassName="flex-shrink-0 self-center bg-white p-1 rounded-md"
-    />
-  ) : null;
-
   return (
     <a
       href={url}
@@ -58,7 +47,6 @@ export default function LinkCard({
     >
       {/* Header strip: domain monogram + site name, evokes the LP header row. */}
       <div className="flex items-stretch gap-2.5 px-3 py-2.5">
-        {isFromMe && printQr}
         {previewImage ? (
           <div className="size-14 flex-shrink-0 self-center overflow-hidden rounded-[10px] bg-white/90">
             {previewImage}
@@ -90,7 +78,6 @@ export default function LinkCard({
             </>
           )}
         </div>
-        {!isFromMe && printQr}
       </div>
     </a>
   );

@@ -29,12 +29,15 @@ export default function ImageAttachment({
   const [isLoading, setIsLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
 
+  const preloadDistance =
+    typeof window === 'undefined' ? 3000 : window.innerHeight * 5;
+
   // Only load images when they're near the viewport (kept once loaded).
   const { ref, inView } = useInView({
     triggerOnce: true,
-    // Start loading well before the image reaches the viewport. The reserved
-    // placeholder below keeps scroll geometry stable while the request runs.
-    rootMargin: '3000px 0px',
+    // Start loading five captured viewport heights ahead. IntersectionObserver
+    // percentages resolve against root width, so use an explicit pixel margin.
+    rootMargin: `${preloadDistance}px 0px`,
   });
 
   const imageUrl = `/api/attachments/${attachmentId}?dbPath=${encodeURIComponent(dbPath)}&attachmentsPath=${encodeURIComponent(attachmentsPath)}&preview=1`;

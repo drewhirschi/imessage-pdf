@@ -3,6 +3,7 @@ import { connectToDatabase } from "@/lib/db/connection";
 import {
   getMessagesForConversation,
   getConversationDetails,
+  getConversationAvailability,
 } from "@/lib/db/queries";
 import { decodeRichLink } from "@/lib/link-preview/decode";
 
@@ -16,6 +17,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "500", 10);
     const getDetails = searchParams.get("getDetails") === "true";
+    const direction = searchParams.get("direction") === "latest" ? "latest" : "earliest";
 
     if (!chatId || !dbPath) {
       return NextResponse.json(
@@ -40,14 +42,15 @@ export async function GET(request: NextRequest) {
       startTimestamp,
       endTimestamp,
       limit,
-      offset
+      offset,
+      direction === "latest" ? "desc" : "asc",
     );
 
     // Decode the rich URL preview (LPLinkMetadata) from each message's
     // payload_data server-side, and drop the raw blob so the JSON stays small.
     // For rich-link messages message.text is usually NULL — the decoded link is
     // the only thing the client can render.
-    const enriched = result.messages.map((m) => {
+    let enriched = result.messages.map((m) => {
       const richLink = decodeRichLink(m.message.payload_data);
       // payload_data and attributedBody are large binary blobs the client
       // never uses directly (rich links and recovered text are decoded
@@ -57,6 +60,7 @@ export async function GET(request: NextRequest) {
       void attributedBody;
       return { ...m, message, richLink };
     });
+    if (direction === "latest") enriched = enriched.reverse();
 
     const response: {
       messages: typeof enriched;
@@ -65,6 +69,7 @@ export async function GET(request: NextRequest) {
       limit: number;
       hasMore: boolean;
       conversationDetails?: ReturnType<typeof getConversationDetails>;
+      conversationAvailability?: ReturnType<typeof getConversationAvailability>;
     } = {
       messages: enriched,
       total: result.total,
@@ -76,6 +81,7 @@ export async function GET(request: NextRequest) {
     // Optionally include conversation details
     if (getDetails) {
       response.conversationDetails = getConversationDetails(parseInt(chatId));
+      response.conversationAvailability = getConversationAvailability(parseInt(chatId));
     }
 
     return NextResponse.json(response);

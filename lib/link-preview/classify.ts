@@ -63,6 +63,11 @@ export function displayDomain(url: string): string {
   }
 }
 
+/** iMessage-owned artwork archived alongside LPLinkMetadata, not user media. */
+export function isRichLinkPreviewAsset(filename: string | null | undefined): boolean {
+  return filename?.toLowerCase().endsWith(".pluginpayloadattachment") ?? false;
+}
+
 /**
  * Classify a message body. `text` may be null/empty (e.g. attachment-only or a
  * rich-link message whose URL lives in payload_data) — those are "no-url".

@@ -4,6 +4,7 @@ import {
   getAllConversations,
   getMessagesForConversation,
   getConversationDetails,
+  getConversationAvailability,
   getAttachmentPath,
 } from "./queries";
 import {
@@ -156,6 +157,39 @@ describe("getMessagesForConversation", () => {
     expect(page1.total).toBe(3);
     expect(page1.messages.map((m) => m.message.ROWID)).toEqual([10, 11]);
     expect(page2.messages.map((m) => m.message.ROWID)).toEqual([12]);
+  });
+
+  it("can fetch the newest page first", () => {
+    const page = getMessagesForConversation(
+      1,
+      undefined,
+      undefined,
+      2,
+      0,
+      "desc",
+    );
+    expect(page.messages.map((m) => m.message.ROWID)).toEqual([12, 11]);
+  });
+});
+
+describe("getConversationAvailability", () => {
+  it("summarizes the full conversation and excludes reactions", () => {
+    const availability = getConversationAvailability(1);
+    expect(availability.totalMessages).toBe(3);
+    expect(availability.firstMessageDate).toBe(TS.t1);
+    expect(availability.lastMessageDate).toBe(TS.t4);
+    expect(
+      availability.messagesByMonth.reduce((sum, month) => sum + month.count, 0),
+    ).toBe(3);
+  });
+
+  it("returns an empty summary for an unknown conversation", () => {
+    expect(getConversationAvailability(999)).toEqual({
+      totalMessages: 0,
+      firstMessageDate: null,
+      lastMessageDate: null,
+      messagesByMonth: [],
+    });
   });
 });
 

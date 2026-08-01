@@ -161,6 +161,13 @@ export interface ConversationSummary {
   is_group: boolean;
 }
 
+export interface ConversationAvailability {
+  totalMessages: number;
+  firstMessageDate: number | null;
+  lastMessageDate: number | null;
+  messagesByMonth: Array<{ month: string; count: number }>;
+}
+
 export interface MessageWithAttachments {
   message: Message;
   handle: Handle | null;

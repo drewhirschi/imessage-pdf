@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -21,6 +21,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ConversationHistory from '@/components/ConversationHistory';
+import type { ConversationAvailability } from '@/lib/db/types';
 
 interface Message {
   ROWID: number;
@@ -63,6 +66,7 @@ const MAX_COLUMN_WIDTH = 820;
 const COLUMN_WIDTH_STORAGE_KEY = 'imessage-column-width';
 const SCREEN_SIZE_STORAGE_KEY = 'imessage-screen-size';
 const QR_PREVIEW_STORAGE_KEY = 'imessage-preview-qr-codes';
+const START_POSITION_STORAGE_KEY = 'imessage-start-position';
 const SNAP_POINTS: { width: number; label: string }[] = [
   { width: 375, label: 'iPhone SE' },
   { width: 390, label: 'iPhone 12 / 13 / 14' },
@@ -110,19 +114,30 @@ function ConversationPageInner() {
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [conversationDetails, setConversationDetails] = useState<ConversationDetails | null>(null);
+  const [conversationAvailability, setConversationAvailability] = useState<ConversationAvailability | null>(null);
   const [columnWidth, setColumnWidth] = useState<number>(DEFAULT_COLUMN_WIDTH);
   const [screenSize, setScreenSize] = useState<string>(
     String(DEFAULT_COLUMN_WIDTH),
   );
   const [previewQrCodes, setPreviewQrCodes] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [startPosition, setStartPosition] = useState<'latest' | 'earliest'>('latest');
+  const [loadingMore, setLoadingMore] = useState(false);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const fetchingRef = useRef(false);
+  const requestIdRef = useRef(0);
+  const pendingScrollHeightRef = useRef<number | null>(null);
+  const scrollToBottomRef = useRef(false);
   const PAGE_SIZE = 500;
 
   useEffect(() => {
     const saved = localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY);
     const savedScreenSize = localStorage.getItem(SCREEN_SIZE_STORAGE_KEY);
     setPreviewQrCodes(localStorage.getItem(QR_PREVIEW_STORAGE_KEY) === 'true');
+    const savedStart = localStorage.getItem(START_POSITION_STORAGE_KEY);
+    if (savedStart === 'earliest' || savedStart === 'latest') {
+      setStartPosition(savedStart);
+    }
     if (saved) {
       const n = parseInt(saved, 10);
       if (!Number.isNaN(n) && n >= MIN_COLUMN_WIDTH && n <= MAX_COLUMN_WIDTH) {
@@ -146,6 +161,10 @@ function ConversationPageInner() {
   useEffect(() => {
     localStorage.setItem(QR_PREVIEW_STORAGE_KEY, String(previewQrCodes));
   }, [previewQrCodes]);
+
+  useEffect(() => {
+    localStorage.setItem(START_POSITION_STORAGE_KEY, startPosition);
+  }, [startPosition]);
 
   const handleScreenSizeChange = (value: string) => {
     setScreenSize(value);
@@ -177,9 +196,18 @@ function ConversationPageInner() {
   };
 
   const fetchMessages = useCallback(async (pageNum: number, reset: boolean = false) => {
+    if (!reset && fetchingRef.current) return;
+    const requestId = ++requestIdRef.current;
+    fetchingRef.current = true;
     try {
       if (reset) {
         setLoading(true);
+      } else {
+        setLoadingMore(true);
+        if (startPosition === 'latest') {
+          const scroller = document.getElementById('scrollableDiv');
+          pendingScrollHeightRef.current = scroller?.scrollHeight ?? null;
+        }
       }
       setError(null);
 
@@ -189,6 +217,7 @@ function ConversationPageInner() {
       url.searchParams.set('page', pageNum.toString());
       url.searchParams.set('limit', PAGE_SIZE.toString());
       url.searchParams.set('getDetails', pageNum === 1 ? 'true' : 'false');
+      url.searchParams.set('direction', startPosition);
       if (startDate) {
         const unixTimestamp = Math.floor(startDate.getTime() / 1000);
         const imessageTimestamp = unixToImessageTimestamp(unixTimestamp);
@@ -209,9 +238,13 @@ function ConversationPageInner() {
       }
 
       const data = await response.json();
+      if (requestId !== requestIdRef.current) return;
 
       if (reset) {
         setMessages(data.messages);
+        scrollToBottomRef.current = startPosition === 'latest';
+      } else if (startPosition === 'latest') {
+        setMessages(prev => [...data.messages, ...prev]);
       } else {
         setMessages(prev => [...prev, ...data.messages]);
       }
@@ -223,20 +256,27 @@ function ConversationPageInner() {
       if (data.conversationDetails) {
         setConversationDetails(data.conversationDetails);
       }
+      if (data.conversationAvailability) {
+        setConversationAvailability(data.conversationAvailability);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
-      if (reset) {
+      if (requestId === requestIdRef.current) {
+        fetchingRef.current = false;
+        setLoadingMore(false);
+      }
+      if (reset && requestId === requestIdRef.current) {
         setLoading(false);
       }
     }
-  }, [chatId, dbPath, startDate, endDate, PAGE_SIZE]);
+  }, [chatId, dbPath, startDate, endDate, startPosition, PAGE_SIZE]);
 
   const fetchMoreMessages = useCallback(() => {
-    if (!loading && hasMore) {
+    if (!loading && !loadingMore && hasMore) {
       fetchMessages(page + 1, false);
     }
-  }, [page, loading, hasMore, fetchMessages]);
+  }, [page, loading, loadingMore, hasMore, fetchMessages]);
 
   const fetchMessagesRef = useCallback(fetchMessages, [fetchMessages]);
 
@@ -247,7 +287,27 @@ function ConversationPageInner() {
       fetchMessagesRef(1, true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dbPath, attachmentsPath, startDate, endDate]);
+  }, [dbPath, attachmentsPath, startDate, endDate, startPosition]);
+
+  useLayoutEffect(() => {
+    const scroller = document.getElementById('scrollableDiv');
+    if (!scroller) return;
+    if (scrollToBottomRef.current) {
+      scroller.scrollTop = scroller.scrollHeight;
+      scrollToBottomRef.current = false;
+      return;
+    }
+    if (pendingScrollHeightRef.current != null) {
+      scroller.scrollTop += scroller.scrollHeight - pendingScrollHeightRef.current;
+      pendingScrollHeightRef.current = null;
+    }
+  }, [messages]);
+
+  const handleMessageScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    if (startPosition === 'latest' && event.currentTarget.scrollTop < 500) {
+      fetchMoreMessages();
+    }
+  }, [startPosition, fetchMoreMessages]);
 
   const handleDateRangeChange = (start: Date | null, end: Date | null) => {
     setStartDate(start);
@@ -402,105 +462,113 @@ function ConversationPageInner() {
         </p>
       </div>
 
-      {conversationDetails && conversationDetails.participants.length > 0 && (
-        <div className="p-4 border-b border-gray-200">
-          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
-            Participants
-          </p>
-          {unresolvedCount > 0 && (
-            <div className="mb-2 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-800">
-              {unresolvedCount} unnamed contact{unresolvedCount === 1 ? '' : 's'} in
-              this chat — click the ✎ to name {unresolvedCount === 1 ? 'it' : 'them'}.
+      <Tabs defaultValue="settings">
+        <div className="border-b border-gray-200 px-4 py-3">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="settings" className="text-xs">Settings</TabsTrigger>
+            <TabsTrigger value="history" className="text-xs">History</TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="settings" className="m-0">
+          {conversationDetails && conversationDetails.participants.length > 0 && (
+            <div className="border-b border-gray-200 p-4">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                Participants
+              </p>
+              {unresolvedCount > 0 && (
+                <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">
+                  {unresolvedCount} unnamed contact{unresolvedCount === 1 ? '' : 's'} in
+                  this chat — click the ✎ to name {unresolvedCount === 1 ? 'it' : 'them'}.
+                </div>
+              )}
+              <ul className="space-y-1.5">
+                {conversationDetails.participants.map((raw) => {
+                  const resolved = contacts?.resolve(raw) ?? null;
+                  return (
+                    <li key={raw} className="group flex items-start gap-2 text-sm">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-gray-900">{resolved ?? raw}</span>
+                          <span className={resolved ? 'opacity-0 transition-opacity group-hover:opacity-100' : 'opacity-100'}>
+                            <InlineNameEditor handleId={raw} />
+                          </span>
+                        </div>
+                        {resolved && <div className="truncate font-mono text-xs text-gray-400">{raw}</div>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
-          <ul className="space-y-1.5">
-            {conversationDetails.participants.map((raw) => {
-              const resolved = contacts?.resolve(raw) ?? null;
-              return (
-                <li key={raw} className="group flex items-start gap-2 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="truncate text-gray-900">{resolved ?? raw}</span>
-                      <span
-                        className={
-                          resolved
-                            ? 'opacity-0 group-hover:opacity-100 transition-opacity'
-                            : 'opacity-100'
-                        }
-                      >
-                        <InlineNameEditor handleId={raw} />
-                      </span>
-                    </div>
-                    {resolved && (
-                      <div className="truncate text-xs text-gray-400 font-mono">{raw}</div>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
 
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-            iPhone width
-          </p>
-          <span className="text-[10px] tabular-nums text-gray-400">
-            {columnWidth}px
-          </span>
-        </div>
-        <Select value={screenSize} onValueChange={handleScreenSizeChange}>
-          <SelectTrigger className="h-9 bg-white text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SNAP_POINTS.map((point) => (
-              <SelectItem key={point.width} value={String(point.width)}>
-                {point.label} ({point.width}px)
-              </SelectItem>
-            ))}
-            <SelectItem value="custom">Custom</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+          <div className="border-b border-gray-200 p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">iPhone width</p>
+              <span className="text-[10px] tabular-nums text-gray-400">{columnWidth}px</span>
+            </div>
+            <Select value={screenSize} onValueChange={handleScreenSizeChange}>
+              <SelectTrigger className="h-9 bg-white text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {SNAP_POINTS.map((point) => (
+                  <SelectItem key={point.width} value={String(point.width)}>
+                    {point.label} ({point.width}px)
+                  </SelectItem>
+                ))}
+                <SelectItem value="custom">Custom</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-      <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-4">
-        <label
-          htmlFor="preview-qr-codes"
-          className="text-xs font-medium text-gray-700"
-        >
-          Preview QR codes
-        </label>
-        <Switch
-          id="preview-qr-codes"
-          checked={previewQrCodes}
-          onCheckedChange={setPreviewQrCodes}
-        />
-      </div>
+          <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-4">
+            <label htmlFor="preview-qr-codes" className="text-xs font-medium text-gray-700">Preview QR codes</label>
+            <Switch id="preview-qr-codes" checked={previewQrCodes} onCheckedChange={setPreviewQrCodes} />
+          </div>
 
-      <div className="p-4 border-b border-gray-200">
-        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
-          Date range
-        </p>
-        <DateRangePicker
-          compact
-          onDateRangeChange={handleDateRangeChange}
-          initialStartDate={startDate}
-          initialEndDate={endDate}
-        />
-      </div>
+          <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-4">
+            <div>
+              <label htmlFor="open-at-latest" className="text-xs font-medium text-gray-800">
+                Open at latest
+              </label>
+              <p className="text-[10px] text-gray-500">
+                {startPosition === 'latest' ? 'Newest messages at the bottom' : 'Start at the first message'}
+              </p>
+            </div>
+            <Switch
+              id="open-at-latest"
+              checked={startPosition === 'latest'}
+              onCheckedChange={(checked) => setStartPosition(checked ? 'latest' : 'earliest')}
+            />
+          </div>
 
-      <div className="p-4">
-        <button
-          onClick={() => setPdfDialogOpen(true)}
-          disabled={generatingPDF || messages.length === 0}
-          className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
-        >
-          {generatingPDF ? 'Generating PDF…' : 'Generate PDF'}
-        </button>
-      </div>
+          <div className="border-b border-gray-200 p-4">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Date range</p>
+            <DateRangePicker
+              compact
+              onDateRangeChange={handleDateRangeChange}
+              initialStartDate={startDate}
+              initialEndDate={endDate}
+            />
+          </div>
+
+          <div className="p-4">
+            <button
+              onClick={() => setPdfDialogOpen(true)}
+              disabled={generatingPDF || messages.length === 0}
+              className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              {generatingPDF ? 'Generating PDF…' : 'Generate PDF'}
+            </button>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="history" className="m-0">
+          {conversationAvailability && (
+            <ConversationHistory availability={conversationAvailability} />
+          )}
+        </TabsContent>
+      </Tabs>
     </aside>
   );
 
@@ -539,7 +607,11 @@ function ConversationPageInner() {
           {columnWidth}px
         </div>
       )}
-      <div id="scrollableDiv" className="flex-1 overflow-y-auto px-3 py-4">
+      <div
+        id="scrollableDiv"
+        onScroll={handleMessageScroll}
+        className="flex-1 overflow-y-auto px-3 py-4"
+      >
         {loading && messages.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-gray-500 text-sm">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
@@ -550,6 +622,26 @@ function ConversationPageInner() {
             No messages found for the selected date range.
           </p>
         ) : (
+          startPosition === 'latest' ? (
+            <>
+              <div className="flex min-h-8 items-center justify-center py-2 text-xs text-gray-400">
+                {loadingMore
+                  ? 'Loading earlier messages…'
+                  : hasMore
+                    ? 'Scroll up for earlier messages'
+                    : `Beginning of conversation (${messages.length} loaded)`}
+              </div>
+              <SwipeForTimestamps>
+                <MessageList
+                  messages={messages}
+                  isGroup={isGroup}
+                  dbPath={dbPath}
+                  attachmentsPath={attachmentsPath}
+                  forPrint={previewQrCodes}
+                />
+              </SwipeForTimestamps>
+            </>
+          ) : (
           <InfiniteScroll
             dataLength={messages.length}
             next={fetchMoreMessages}
@@ -579,6 +671,7 @@ function ConversationPageInner() {
               />
             </SwipeForTimestamps>
           </InfiniteScroll>
+          )
         )}
       </div>
     </div>

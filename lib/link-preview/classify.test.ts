@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { classifyMessage, displayDomain, extractUrls, trimUrl } from "./classify";
+import {
+  classifyMessage,
+  displayDomain,
+  extractUrls,
+  isRichLinkPreviewAsset,
+  trimUrl,
+} from "./classify";
 
 describe("trimUrl", () => {
   it("strips trailing sentence punctuation", () => {
@@ -99,5 +105,17 @@ describe("displayDomain", () => {
   });
   it("falls back gracefully on junk", () => {
     expect(displayDomain("not a url")).toBe("not a url");
+  });
+});
+
+describe("isRichLinkPreviewAsset", () => {
+  it("recognizes archived rich-link artwork case-insensitively", () => {
+    expect(isRichLinkPreviewAsset("/Attachments/art.pluginPayloadAttachment")).toBe(true);
+    expect(isRichLinkPreviewAsset("/Attachments/art.PLUGINPAYLOADATTACHMENT")).toBe(true);
+  });
+
+  it("does not hide ordinary message images", () => {
+    expect(isRichLinkPreviewAsset("/Attachments/photo.HEIC")).toBe(false);
+    expect(isRichLinkPreviewAsset(null)).toBe(false);
   });
 });

@@ -10,6 +10,7 @@ import type {
   Reaction,
   ReactionType,
   DatabaseHealth,
+  ConversationAvailability,
 } from "./types";
 
 export function getAllConversations(
@@ -141,7 +142,8 @@ export function getMessagesForConversation(
   startDate?: number,
   endDate?: number,
   limit?: number,
-  offset?: number
+  offset?: number,
+  order: "asc" | "desc" = "asc",
 ): { messages: MessageWithAttachments[]; total: number } {
   const db = getDatabase();
 
@@ -169,7 +171,7 @@ export function getMessagesForConversation(
     WHERE cmj.chat_id = ? 
       AND (m.associated_message_type IS NULL OR m.associated_message_type < 2000 OR m.associated_message_type > 3005)
       ${dateFilter}
-    ORDER BY m.date ASC
+    ORDER BY m.date ${order === "desc" ? "DESC" : "ASC"}
   `;
 
   // Get total count before applying pagination
@@ -306,6 +308,48 @@ export function getMessagesForConversation(
   return {
     messages: messagesWithAttachments,
     total,
+  };
+}
+
+export function getConversationAvailability(
+  chatId: number,
+): ConversationAvailability {
+  const db = getDatabase();
+  const displayableFilter =
+    "(m.associated_message_type IS NULL OR m.associated_message_type < 2000 OR m.associated_message_type > 3005)";
+
+  const summary = db
+    .prepare(
+      `SELECT COUNT(*) as totalMessages,
+              MIN(CASE WHEN m.date > 0 THEN m.date END) as firstMessageDate,
+              MAX(CASE WHEN m.date > 0 THEN m.date END) as lastMessageDate
+       FROM message m
+       JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
+       WHERE cmj.chat_id = ? AND ${displayableFilter}`,
+    )
+    .get(chatId) as {
+      totalMessages: number;
+      firstMessageDate: number | null;
+      lastMessageDate: number | null;
+    };
+
+  const rows = db
+    .prepare(
+      `SELECT strftime('%Y-%m', (m.date / 1000000000) + ${IMESSAGE_EPOCH_OFFSET_SECONDS}, 'unixepoch') as month,
+              COUNT(*) as count
+       FROM message m
+       JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
+       WHERE cmj.chat_id = ? AND ${displayableFilter} AND m.date > 0
+       GROUP BY month
+       ORDER BY month ASC`,
+    )
+    .all(chatId) as Array<{ month: string | null; count: number }>;
+
+  return {
+    ...summary,
+    messagesByMonth: rows
+      .filter((row): row is { month: string; count: number } => row.month != null)
+      .map((row) => ({ month: row.month, count: row.count })),
   };
 }
 
