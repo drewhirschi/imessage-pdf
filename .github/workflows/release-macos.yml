@@ -46,6 +46,8 @@ jobs:
           test -x "$APP/Contents/Resources/node"
           test "$("$APP/Contents/Resources/node" --version)" = "v24.18.1"
           test -f "$APP/Contents/Resources/app/.next/standalone/server.js"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          test "$(defaults read "$APP/Contents/Info" CFBundleIdentifier)" = "com.imessagepdf.exporter"
 
       - name: Smoke-test packaged app
         run: |
@@ -82,7 +84,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          draft: true
+          draft: false
           generate_release_notes: true
           files: |
             dist-electron/*.dmg

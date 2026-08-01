@@ -75,7 +75,9 @@ Copy this section for each release and record the macOS and hardware versions.
 - [x] Packaged runtime reports Node v24.18.1.
 - [x] Packaged app launched its own server and rendered application content.
 - [x] DMG mounted and contained the app plus Applications shortcut.
+- [x] GitHub-hosted DMG downloaded and matched its published SHA-256.
+- [x] GitHub-hosted app installed into Applications and launched successfully.
+- [x] Installed app read the default live Messages database and attachments.
 - [ ] Gatekeeper behavior from an actual GitHub download.
-- [ ] Clean installation into Applications.
-- [ ] Full Disk Access grant/relaunch using the installed app.
+- [ ] Full Disk Access grant/relaunch on a Mac where access was not already effective.
 - [ ] Native PDF export using private Messages data.

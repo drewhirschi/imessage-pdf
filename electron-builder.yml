@@ -10,6 +10,7 @@
 appId: com.imessagepdf.exporter
 productName: iMessage PDF Exporter
 copyright: Copyright © 2026
+afterPack: electron/afterPack.js
 
 directories:
   output: dist-electron

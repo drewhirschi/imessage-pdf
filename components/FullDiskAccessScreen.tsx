@@ -23,7 +23,7 @@ interface FullDiskAccessScreenProps {
   dbPath?: string;
   detail?: string;
   /** Re-run the health check (e.g. after granting access). */
-  onRetry: () => void;
+  onRetry: () => void | Promise<void>;
   /** Fall back to typing paths manually. */
   onManual: () => void;
 }
@@ -35,6 +35,8 @@ export default function FullDiskAccessScreen({
   onManual,
 }: FullDiskAccessScreenProps) {
   const [isElectron, setIsElectron] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [retryMessage, setRetryMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setIsElectron(!!getElectronBridge());
@@ -61,6 +63,16 @@ export default function FullDiskAccessScreen({
     } catch {
       /* ignore — instructions below cover it */
     }
+  };
+
+  const retry = async () => {
+    setRetrying(true);
+    setRetryMessage(null);
+    await onRetry();
+    setRetrying(false);
+    setRetryMessage(
+      'Access is still denied. Confirm the app is enabled in Full Disk Access, then quit and reopen it.',
+    );
   };
 
   const grantee = isElectron
@@ -130,10 +142,11 @@ export default function FullDiskAccessScreen({
             </button>
           )}
           <button
-            onClick={onRetry}
+            onClick={retry}
+            disabled={retrying}
             className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm font-medium"
           >
-            Retry
+            {retrying ? 'Checking…' : 'Retry'}
           </button>
           <button
             onClick={onManual}
@@ -142,6 +155,12 @@ export default function FullDiskAccessScreen({
             Enter paths manually
           </button>
         </div>
+
+        {retryMessage && (
+          <p role="status" className="mt-3 text-sm text-amber-700">
+            {retryMessage}
+          </p>
+        )}
 
         {!isElectron && (
           <p className="text-xs text-gray-400 mt-4">
