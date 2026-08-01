@@ -44,7 +44,7 @@ jobs:
         run: |
           APP="dist-electron/mac-arm64/iMessage PDF Exporter.app"
           test -x "$APP/Contents/Resources/node"
-          test "$($APP/Contents/Resources/node --version)" = "v24.18.1"
+          test "$("$APP/Contents/Resources/node" --version)" = "v24.18.1"
           test -f "$APP/Contents/Resources/app/.next/standalone/server.js"
 
       - name: Smoke-test packaged app
