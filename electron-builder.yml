@@ -34,13 +34,8 @@ extraResources:
     to: app/.next/standalone
     filter:
       - "**/*"
-  # NOTE (macOS packaging): to run the server child process without requiring a
-  # system Node install, bundle a Node binary here so resolveNodeBinary() finds
-  # <resources>/node:
-  #   - from: <path-to-mac-node-binary>
-  #     to: node
-  # On Linux dev machines the system `node` on PATH is used instead, so this is
-  # left commented for now.
+  - from: .electron-runtime/node
+    to: node
 
 # --- macOS (primary) ---
 mac:
@@ -49,7 +44,7 @@ mac:
     - target: dmg
       arch:
         - arm64
-        - x64
+  icon: assets/app-icon.png
   # Full Disk Access + reading ~/Library/Messages needs the hardened runtime off
   # OR the right entitlements; unsigned ad-hoc build for v1 (users right-click →
   # Open). Signing/notarization is a later, account-gated step.

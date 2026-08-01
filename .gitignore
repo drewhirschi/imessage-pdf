@@ -56,3 +56,4 @@ next-env.d.ts
 
 # Electron packaging output (electron-builder)
 /dist-electron/
+/.electron-runtime/

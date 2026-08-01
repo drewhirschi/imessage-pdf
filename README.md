@@ -1,68 +1,49 @@
 # iMessage PDF Exporter
 
-A Next.js application that allows you to export your iMessage conversations to beautiful, printable PDFs.
+A local macOS app for browsing iMessage history and exporting conversations as printable books. Messages and attachments stay on the computer; the Apple Messages database is opened read-only.
 
 ## Features
 
-- 📱 View all your iMessage conversations
-- 📅 Filter messages by date range
-- 🖼️ Display images and attachments inline
-- 📄 Generate printable PDFs with iMessage-style formatting
-- 👥 Support for both individual and group conversations
-- 🎨 Clean, modern interface
-
-## Prerequisites
-
-- Node.js 18+
-- Access to your iMessage database (macOS)
-- iMessage database file (`chat.db`)
-- iMessage attachments folder
+- Browse, search, and pin individual or group conversations
+- Inspect available history by year and month
+- Render images, videos, reactions, rich links, and attachments
+- Filter long conversations to a date range
+- Export an A5 print-ready PDF with optional QR codes for links
+- Keep contact names and pinned conversations in a separate local app database
 
 ## Installation
 
-1. Clone or download this repository
-2. Install dependencies:
+The packaged app currently supports Apple Silicon Macs. Download the latest DMG from [GitHub Releases](https://github.com/drewhirschi/imessage-pdf/releases), open it, and drag **iMessage PDF Exporter** into Applications. Node.js is bundled in the app.
 
-   ```bash
-   npm install
-   ```
+The app is currently unsigned. On first launch, right-click the app in Applications, choose **Open**, then choose **Open** again. If macOS still reports that the developer cannot be verified, go to **System Settings > Privacy & Security** and choose **Open Anyway**.
 
-3. Start the development server:
+As a last-resort quarantine workaround for a release you downloaded from this repository:
 
-   ```bash
-   npm run dev
-   ```
+```bash
+xattr -dr com.apple.quarantine "/Applications/iMessage PDF Exporter.app"
+```
 
-4. Open [http://localhost:3000](http://localhost:3000) in your browser
+Only run that command for a DMG you obtained from this project's release page and whose checksum matches `SHA256SUMS.txt`.
 
 ## Usage
 
-### Finding Your iMessage Data
+### First Launch
 
-On macOS, your iMessage data is typically located at:
+The app checks the standard `~/Library/Messages` location automatically. macOS requires Full Disk Access for this folder, so the app will explain the permission and open the correct System Settings pane. Add **iMessage PDF Exporter**, enable it, then relaunch the app.
 
-- **Database**: `~/Library/Messages/chat.db`
-- **Attachments**: `~/Library/Messages/Attachments/`
-
-### Using the App
-
-1. **Configure Paths**:
-   - Enter the paths to your iMessage database and attachments folder manually, OR
-   - Use the "Browse" button to select files (note: due to browser security restrictions, you may need to manually enter the full path)
-   - Use the quick-fill buttons for common macOS paths
-2. **Browse Conversations**: View all your available conversations
-3. **Select a Conversation**: Click on any conversation to view its messages
-4. **Filter by Date**: Use the date range picker to filter messages
-5. **Generate PDF**: Click "Generate PDF" to download a printable version
+You can also point the app at a copied backup containing `chat.db` and an `Attachments` directory.
 
 ### PDF Features
 
 - Clean, print-friendly layout
 - iMessage-style message bubbles
 - Timestamps and sender information
-- Image placeholders (images are referenced but not embedded)
+- Embedded images and link previews
 - Proper page breaks and formatting
 - Date separators for better organization
+- Optional QR codes in the inner margin for printed links
+
+The default page size is A5 (148 x 210 mm / 5.83 x 8.27 in). One tested physical-book configuration is Lulu with Color, 80# White Coated paper, Hardcover Case Wrap, and a Matte cover.
 
 ## Technical Details
 
@@ -72,7 +53,7 @@ On macOS, your iMessage data is typically located at:
 - **TypeScript** - Type safety
 - **Tailwind CSS** - Styling
 - **node:sqlite** - built-in SQLite database access (read-only)
-- **pdf-lib** - PDF generation
+- **Electron** - packaged macOS desktop shell and native PDF export
 - **date-fns** - Date formatting
 
 ### Database Schema
@@ -96,20 +77,32 @@ The app reads from the standard iMessage SQLite database with these key tables:
 
 ### Common Issues
 
-1. **"Database not found"**: Ensure the path to `chat.db` is correct
+1. **"Database not found"**: Confirm Messages has downloaded locally or select a copied backup
 2. **"No conversations found"**: Check that the database file is accessible and not corrupted
 3. **"Attachments not loading"**: Verify the attachments folder path is correct
-4. **Permission errors**: Make sure the app has read access to the iMessage files
+4. **Permission errors**: Add the app under Full Disk Access, then quit and reopen it
 
 ### File Permissions
 
-On macOS, you may need to grant Terminal (or your code editor) permission to access your Messages folder:
+For the packaged app, grant **iMessage PDF Exporter** permission:
 
-1. Go to System Preferences > Security & Privacy > Privacy
-2. Select "Full Disk Access" or "Files and Folders"
-3. Add your terminal application
+1. Open System Settings > Privacy & Security > Full Disk Access
+2. Add iMessage PDF Exporter from Applications
+3. Enable it, then quit and reopen the app
 
 ## Development
+
+Requires Node 24 and pnpm 10.
+
+```bash
+pnpm install
+pnpm dev             # browser development at localhost:3000
+pnpm electron:dev    # prepare and launch the Electron shell
+pnpm test
+pnpm electron:build  # unsigned Apple Silicon DMG, including Node 24
+```
+
+`electron:dev` rebuilds the standalone Next server before launching Electron. Renderer hot reload remains available through `pnpm dev`; the packaged-server development command requires a restart after code changes.
 
 ### Project Structure
 
@@ -135,6 +128,8 @@ On macOS, you may need to grant Terminal (or your code editor) permission to acc
 ## License
 
 This project is for personal use. Please respect Apple's terms of service and privacy policies when using this tool.
+
+Release verification is tracked in [docs/release-checklist.md](docs/release-checklist.md).
 
 ## Disclaimer
 

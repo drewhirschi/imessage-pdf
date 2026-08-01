@@ -1,6 +1,8 @@
 {
   "name": "imessage-pdf",
   "version": "0.1.0",
+  "description": "Browse local iMessage history and export conversations as printable books.",
+  "author": "Drew Hirschi",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -12,9 +14,10 @@
     "electron:prepare": "NODE_OPTIONS=--experimental-sqlite next build --turbopack && node electron/prepareStandalone.js",
     "electron:start": "electron .",
     "electron:dev": "pnpm run electron:prepare && electron .",
-    "electron:build": "pnpm run electron:prepare && electron-builder",
+    "electron:runtime": "node electron/prepareNodeRuntime.js",
+    "electron:build": "pnpm run electron:runtime && pnpm run electron:prepare && ELECTRON_CACHE=${ELECTRON_CACHE:-/tmp/imessage-pdf-electron-cache} electron-builder --mac dmg --arm64",
     "electron:build:linux": "pnpm run electron:prepare && electron-builder --linux dir",
-    "electron:build:mac": "pnpm run electron:prepare && electron-builder --mac dmg"
+    "electron:build:mac": "pnpm run electron:build"
   },
   "engines": {
     "node": ">=24"
