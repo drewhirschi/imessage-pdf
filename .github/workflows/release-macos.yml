@@ -50,7 +50,7 @@ jobs:
             "require('module').createRequire(process.argv[1])('sharp')" \
             "$PWD/$APP/Contents/Resources/app/.next/standalone/server.js"
           codesign --verify --deep --strict --verbose=2 "$APP"
-          test "$(defaults read "$APP/Contents/Info" CFBundleIdentifier)" = "com.imessagepdf.exporter"
+          test "$(plutil -extract CFBundleIdentifier raw -o - "$APP/Contents/Info.plist")" = "com.imessagepdf.exporter"
           codesign -dr - "$APP" 2>&1 | grep -q 'designated => identifier "com.imessagepdf.exporter"'
 
       - name: Smoke-test packaged app
