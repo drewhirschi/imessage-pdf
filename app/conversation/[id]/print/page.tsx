@@ -62,6 +62,8 @@ function PrintPageInner() {
         const data = await res.json();
 
         all.push(...(data.messages as MessageWithAttachments[]));
+        document.documentElement.setAttribute('data-export-loaded', String(all.length));
+        document.documentElement.setAttribute('data-export-total', String(data.total ?? all.length));
         hasMore = !!data.hasMore;
         page += 1;
 
@@ -74,7 +76,9 @@ function PrintPageInner() {
       setMessages(all);
       setReady(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'failed');
+      const message = err instanceof Error ? err.message : 'failed';
+      document.documentElement.setAttribute('data-export-error', message);
+      setError(message);
       setReady(true);
     }
   }, [chatId, dbPath, startDate, endDate]);

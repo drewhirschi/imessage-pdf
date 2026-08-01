@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AlertTriangle } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -26,6 +27,14 @@ export interface PDFOptions {
   customHeightIn: number;
   marginIn: number;
   columnWidthPx: number;
+}
+
+export interface PDFProgress {
+  percent: number;
+  stage: string;
+  detail?: string;
+  pageEstimate?: number;
+  error?: boolean;
 }
 
 export type PageSizeKey = 'A5' | 'Letter' | 'Legal' | 'A4' | 'Tabloid' | 'Custom';
@@ -44,6 +53,9 @@ interface Props {
   defaultColumnWidthPx: number;
   onSubmit: (opts: PDFOptions) => void;
   submitting?: boolean;
+  progress?: PDFProgress | null;
+  error?: string | null;
+  totalMessages: number;
 }
 
 export default function PDFOptionsDialog({
@@ -52,6 +64,9 @@ export default function PDFOptionsDialog({
   defaultColumnWidthPx,
   onSubmit,
   submitting,
+  progress,
+  error,
+  totalMessages,
 }: Props) {
   const [pageSize, setPageSize] = useState<PageSizeKey>('A5');
   const [customW, setCustomW] = useState<number>(5.83);
@@ -68,6 +83,9 @@ export default function PDFOptionsDialog({
       columnWidthPx,
     });
   };
+  const roughMinPages = Math.max(1, Math.ceil(totalMessages / 22));
+  const roughMaxPages = Math.max(1, Math.ceil(totalMessages / 8));
+  const isLargeExport = totalMessages >= 3000;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -174,6 +192,55 @@ export default function PDFOptionsDialog({
               and had no problems with the service.
             </p>
           </div>
+
+          <div className={`rounded-md border p-3 text-xs ${
+            isLargeExport
+              ? 'border-amber-300 bg-amber-50 text-amber-900'
+              : 'border-gray-200 bg-gray-50 text-gray-600'
+          }`}>
+            <div className="flex items-start gap-2">
+              {isLargeExport && <AlertTriangle className="mt-0.5 size-4 shrink-0" />}
+              <div>
+                <p className="font-medium">
+                  {totalMessages.toLocaleString()} messages · roughly{' '}
+                  {roughMinPages.toLocaleString()}–{roughMaxPages.toLocaleString()} A5 pages
+                </p>
+                <p className="mt-0.5 opacity-80">
+                  Images and long messages can increase the final count.
+                  {isLargeExport ? ' Large books can take several minutes to render.' : ''}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {(submitting || progress) && (
+            <div className={`rounded-md border p-3 ${progress?.error ? 'border-red-300 bg-red-50' : 'border-blue-200 bg-blue-50'}`}>
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-medium text-gray-900">{progress?.stage ?? 'Starting export'}</span>
+                {!progress?.error && <span className="tabular-nums text-gray-600">{progress?.percent ?? 0}%</span>}
+              </div>
+              {!progress?.error && (
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-blue-100">
+                  <div
+                    className="h-full rounded-full bg-blue-600 transition-[width] duration-300"
+                    style={{ width: `${Math.max(2, progress?.percent ?? 2)}%` }}
+                  />
+                </div>
+              )}
+              {progress?.detail && (
+                <p className={`mt-2 text-xs ${progress.error ? 'text-red-700' : 'text-gray-600'}`}>
+                  {progress.detail}
+                </p>
+              )}
+            </div>
+          )}
+
+          {error && !progress?.error && (
+            <div role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-xs text-red-700">
+              <p className="font-medium">Something went wrong while exporting.</p>
+              <p className="mt-1 break-words">{error}</p>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

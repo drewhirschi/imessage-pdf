@@ -75,6 +75,15 @@
     break-inside: avoid;
     page-break-inside: avoid;
   }
+  .message-row {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .reaction-indicator {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    print-color-adjust: exact;
+  }
   .message-bubble-item img,
   .message-bubble-item svg,
   .message-bubble-item video {

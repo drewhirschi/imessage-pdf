@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import DateRangePicker from '@/components/DateRangePicker';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import MessageList from '@/components/MessageList';
-import PDFOptionsDialog, { type PDFOptions } from '@/components/PDFOptionsDialog';
+import PDFOptionsDialog, { type PDFOptions, type PDFProgress } from '@/components/PDFOptionsDialog';
 import { unixToImessageTimestamp } from '@/lib/utils/timestamp';
 import { ContactsProvider, useContactsOptional } from '@/components/ContactsProvider';
 import InlineNameEditor from '@/components/InlineNameEditor';
@@ -109,6 +109,8 @@ function ConversationPageInner() {
   const [startDate, setStartDate] = useState<Date | null>(getInitialDateFromURL('startDate'));
   const [endDate, setEndDate] = useState<Date | null>(getInitialDateFromURL('endDate'));
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState<PDFProgress | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -129,6 +131,13 @@ function ConversationPageInner() {
   const pendingScrollHeightRef = useRef<number | null>(null);
   const scrollToBottomRef = useRef(false);
   const PAGE_SIZE = 500;
+
+  useEffect(() => {
+    const bridge = (window as unknown as {
+      electron?: { onPDFProgress?: (callback: (progress: PDFProgress) => void) => () => void };
+    }).electron;
+    return bridge?.onPDFProgress?.((progress) => setPdfProgress(progress));
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY);
@@ -333,6 +342,8 @@ function ConversationPageInner() {
   const submitPDFRequest = async (opts: PDFOptions) => {
     try {
       setGeneratingPDF(true);
+      setPdfError(null);
+      setPdfProgress({ percent: 1, stage: 'Starting export', detail: 'Preparing the local print renderer…' });
 
       let startImessageTimestamp: number | null = null;
       let endImessageTimestamp: number | null = null;
@@ -386,6 +397,7 @@ function ConversationPageInner() {
         throw new Error('Failed to generate PDF');
       }
 
+      setPdfProgress({ percent: 90, stage: 'Downloading PDF', detail: 'The browser renderer finished; preparing the file…' });
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -397,7 +409,9 @@ function ConversationPageInner() {
       document.body.removeChild(a);
       setPdfDialogOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate PDF');
+      const message = err instanceof Error ? err.message : 'Failed to generate PDF';
+      setPdfError(message);
+      setPdfProgress({ percent: 0, stage: 'Export failed', detail: message, error: true });
     } finally {
       setGeneratingPDF(false);
     }
@@ -554,7 +568,11 @@ function ConversationPageInner() {
 
           <div className="p-4">
             <button
-              onClick={() => setPdfDialogOpen(true)}
+              onClick={() => {
+                setPdfError(null);
+                setPdfProgress(null);
+                setPdfDialogOpen(true);
+              }}
               disabled={generatingPDF || messages.length === 0}
               className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-300"
             >
@@ -689,6 +707,9 @@ function ConversationPageInner() {
         defaultColumnWidthPx={columnWidth}
         onSubmit={submitPDFRequest}
         submitting={generatingPDF}
+        progress={pdfProgress}
+        error={pdfError}
+        totalMessages={totalCount}
       />
     </div>
   );

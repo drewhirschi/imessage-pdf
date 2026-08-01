@@ -127,6 +127,14 @@ ipcMain.handle('open-external', async (_event, url) => {
   return { ok: true };
 });
 
+ipcMain.handle('show-app-in-finder', async () => {
+  const appPath = app.isPackaged
+    ? path.resolve(process.execPath, '..', '..', '..')
+    : process.execPath;
+  shell.showItemInFolder(appPath);
+  return { ok: true };
+});
+
 ipcMain.handle('relaunch', async () => {
   // app.exit() skips before-quit, so stop the server child explicitly or
   // every FDA grant-and-relaunch leaks a running Next server.
@@ -138,8 +146,13 @@ ipcMain.handle('relaunch', async () => {
   app.exit(0);
 });
 
-ipcMain.handle('export-pdf', async (_event, body) => {
+ipcMain.handle('export-pdf', async (event, body) => {
+  const sendProgress = (progress) => {
+    if (!event.sender.isDestroyed()) event.sender.send('pdf-progress', progress);
+  };
+  sendProgress({ percent: 2, stage: 'Starting export', detail: 'Opening the print renderer…' });
   if (!serverHandle) {
+    sendProgress({ percent: 0, stage: 'Export failed', detail: 'The local server is not ready.', error: true });
     return { error: 'Server not ready' };
   }
   const chatId = Number(body?.chatId);
@@ -165,16 +178,31 @@ ipcMain.handle('export-pdf', async (_event, body) => {
   attachNavigationGuards(printWin, serverHandle.url);
 
   try {
+    sendProgress({ percent: 8, stage: 'Loading conversation', detail: 'Reading messages from the local database…' });
     await printWin.loadURL(printUrl);
 
     // Wait until the print page signals it has mounted all messages, then wait
     // for every <img> to finish (attachments are lazy-loaded). Mirrors the
     // puppeteer readiness checks in app/api/generate-pdf/route.ts.
-    await waitForPrintReady(printWin.webContents);
+    await waitForPrintReady(printWin.webContents, sendProgress);
+
+    const scrollHeight = await printWin.webContents.executeJavaScript(
+      'document.documentElement.scrollHeight',
+      true,
+    );
+    const pageEstimate = estimatePageCount(scrollHeight, body);
+    sendProgress({
+      percent: 84,
+      stage: 'Paginating book',
+      detail: `The finished PDF will be approximately ${pageEstimate.toLocaleString()} pages.`,
+      pageEstimate,
+    });
 
     const options = mapPrintOptions(body);
+    sendProgress({ percent: 88, stage: 'Rendering PDF', detail: 'Chromium is laying out and drawing every page…', pageEstimate });
     const pdfData = await printWin.webContents.printToPDF(options);
 
+    sendProgress({ percent: 96, stage: 'Ready to save', detail: 'Choose where to save the completed PDF.', pageEstimate });
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
       title: 'Save conversation PDF',
       defaultPath: suggestedPdfFilename(body.chatId),
@@ -182,13 +210,16 @@ ipcMain.handle('export-pdf', async (_event, body) => {
     });
 
     if (canceled || !filePath) {
+      sendProgress({ percent: 0, stage: 'Export canceled', detail: 'No PDF was saved.' });
       return { canceled: true };
     }
 
     await fs.promises.writeFile(filePath, pdfData);
+    sendProgress({ percent: 100, stage: 'Export complete', detail: `Saved the PDF (approximately ${pageEstimate.toLocaleString()} pages).`, pageEstimate });
     return { filePath };
   } catch (err) {
     log(`[export-pdf] error: ${err && err.stack ? err.stack : String(err)}`);
+    sendProgress({ percent: 0, stage: 'Export failed', detail: String((err && err.message) || err), error: true });
     return { error: String((err && err.message) || err) };
   } finally {
     if (!printWin.isDestroyed()) printWin.destroy();
@@ -198,45 +229,92 @@ ipcMain.handle('export-pdf', async (_event, body) => {
 // Drive the same readiness protocol as the puppeteer route: wait for
 // data-print-ready, scroll to trigger lazy image observers, then wait for all
 // <img>s to settle.
-async function waitForPrintReady(webContents, timeoutMs = 180000) {
+async function waitForPrintReady(webContents, onProgress = () => {}, timeoutMs = 900000) {
   const deadline = Date.now() + timeoutMs;
 
-  const poll = async (expr) => {
-    while (Date.now() < deadline) {
-      const ok = await webContents.executeJavaScript(expr, true);
-      if (ok) return;
-      await delay(250);
+  let printReady = false;
+  while (Date.now() < deadline) {
+    const state = await webContents.executeJavaScript(
+      `({
+        ready: document.documentElement.getAttribute('data-print-ready') === '1',
+        loaded: Number(document.documentElement.getAttribute('data-export-loaded') || 0),
+        total: Number(document.documentElement.getAttribute('data-export-total') || 0),
+        error: document.documentElement.getAttribute('data-export-error')
+      })`,
+      true,
+    );
+    if (state.error) throw new Error(state.error);
+    const ratio = state.total > 0 ? Math.min(1, state.loaded / state.total) : 0;
+    onProgress({
+      percent: Math.round(10 + ratio * 20),
+      stage: 'Loading messages',
+      detail: state.total > 0
+        ? `${state.loaded.toLocaleString()} of ${state.total.toLocaleString()} messages loaded`
+        : 'Reading conversation pages…',
+    });
+    if (state.ready) {
+      printReady = true;
+      break;
     }
-    throw new Error('Timed out waiting for print page readiness');
-  };
-
-  await poll(`document.documentElement.getAttribute('data-print-ready') === '1'`);
+    await delay(250);
+  }
+  if (!printReady) throw new Error('Timed out loading messages for print');
 
   // Scroll through so IntersectionObserver-based lazy media mounts.
-  await webContents.executeJavaScript(
-    `(async () => {
-       const step = Math.max(400, Math.floor(window.innerHeight * 0.8));
-       let y = 0;
-       while (y < document.documentElement.scrollHeight) {
-         window.scrollTo(0, y);
-         await new Promise((r) => setTimeout(r, 120));
-         y += step;
-       }
-       window.scrollTo(0, document.documentElement.scrollHeight);
-       await new Promise((r) => setTimeout(r, 250));
-       window.scrollTo(0, 0);
-       return true;
-     })()`,
+  const dimensions = await webContents.executeJavaScript(
+    `({ height: document.documentElement.scrollHeight, viewport: window.innerHeight })`,
     true,
   );
+  const step = Math.max(400, Math.floor(dimensions.viewport * 0.8));
+  for (let y = 0; y < dimensions.height; y += step) {
+    await webContents.executeJavaScript(`window.scrollTo(0, ${y})`, true);
+    await delay(100);
+    const ratio = Math.min(1, y / Math.max(1, dimensions.height));
+    onProgress({
+      percent: Math.round(30 + ratio * 35),
+      stage: 'Preparing media',
+      detail: 'Loading and converting images throughout the conversation…',
+    });
+  }
+  await webContents.executeJavaScript('window.scrollTo(0, document.documentElement.scrollHeight)', true);
+  await delay(250);
 
-  await poll(
-    `(() => {
-       const imgs = Array.from(document.querySelectorAll('img'));
-       if (imgs.length === 0) return true;
-       return imgs.every((img) => img.complete && (img.naturalWidth > 0 || img.dataset.allowBroken === '1'));
-     })()`,
-  );
+  let mediaReady = false;
+  while (Date.now() < deadline) {
+    const media = await webContents.executeJavaScript(
+      `(() => {
+         const imgs = Array.from(document.querySelectorAll('img'));
+         const complete = imgs.filter((img) => img.complete).length;
+         return { total: imgs.length, complete };
+       })()`,
+      true,
+    );
+    const ratio = media.total > 0 ? media.complete / media.total : 1;
+    onProgress({
+      percent: Math.round(65 + ratio * 17),
+      stage: 'Finishing media',
+      detail: media.total > 0
+        ? `${media.complete.toLocaleString()} of ${media.total.toLocaleString()} images prepared`
+        : 'No images need preparation.',
+    });
+    if (media.complete >= media.total) {
+      mediaReady = true;
+      break;
+    }
+    await delay(250);
+  }
+  if (!mediaReady) throw new Error('Timed out preparing images for print');
+  await webContents.executeJavaScript('window.scrollTo(0, 0)', true);
+}
+
+function estimatePageCount(scrollHeight, body) {
+  const heights = { A5: 8.27, Letter: 11, Legal: 14, A4: 11.69, Tabloid: 17 };
+  const pageHeightIn = body.pageSize === 'Custom'
+    ? Number(body.customHeightIn) || 8.27
+    : heights[body.pageSize] || 8.27;
+  const margin = Number(body.marginIn ?? 0.5);
+  const printablePixels = Math.max(96, (pageHeightIn - margin * 2) * 96);
+  return Math.max(1, Math.ceil(Number(scrollHeight) / printablePixels));
 }
 
 function delay(ms) {

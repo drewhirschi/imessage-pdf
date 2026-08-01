@@ -7,6 +7,7 @@ const FDA_DEEP_LINK =
 
 interface ElectronBridge {
   openExternal?: (url: string) => void;
+  showAppInFinder?: () => void;
   relaunch?: () => void;
 }
 
@@ -108,7 +109,7 @@ export default function FullDiskAccessScreen({
           </p>
         )}
 
-        <ol className="list-decimal list-inside space-y-2 text-gray-700 mb-6 bg-gray-50 rounded-lg p-4">
+        <ol className="list-decimal space-y-2 pl-9 text-gray-700 mb-6 bg-gray-50 rounded-lg p-4">
           <li>
             Open{' '}
             <strong>
@@ -117,8 +118,18 @@ export default function FullDiskAccessScreen({
             .
           </li>
           <li>
-            Turn on the switch for <strong>{grantee}</strong> (use{' '}
-            <strong>+</strong> to add it if it is not listed).
+            Click the <strong>+</strong> button below the app list. The app is
+            usually not listed the first time.
+          </li>
+          {isElectron && (
+            <li>
+              In the file picker, open <strong>Applications</strong>, select{' '}
+              <strong>iMessage PDF Exporter</strong>, then click{' '}
+              <strong>Open</strong>.
+            </li>
+          )}
+          <li>
+            Make sure the switch next to <strong>{grantee}</strong> is on.
           </li>
           <li>
             macOS requires the app to be <strong>restarted</strong> after
@@ -133,6 +144,14 @@ export default function FullDiskAccessScreen({
           >
             Open System Settings
           </button>
+          {isElectron && (
+            <button
+              onClick={() => getElectronBridge()?.showAppInFinder?.()}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm font-medium"
+            >
+              Show App in Finder
+            </button>
+          )}
           {isElectron && (
             <button
               onClick={() => getElectronBridge()?.relaunch?.()}

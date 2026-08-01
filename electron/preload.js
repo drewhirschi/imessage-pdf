@@ -11,6 +11,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electron', {
   isElectron: true,
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  showAppInFinder: () => ipcRenderer.invoke('show-app-in-finder'),
   relaunch: () => ipcRenderer.invoke('relaunch'),
   exportPDF: (body) => ipcRenderer.invoke('export-pdf', body),
+  onPDFProgress: (callback) => {
+    const listener = (_event, progress) => callback(progress);
+    ipcRenderer.on('pdf-progress', listener);
+    return () => ipcRenderer.removeListener('pdf-progress', listener);
+  },
 });

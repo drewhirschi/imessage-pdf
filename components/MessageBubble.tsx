@@ -348,7 +348,7 @@ export default function MessageBubble({
       )}
 
       <div
-        className={`relative flex ${isFromMe ? 'justify-end' : 'justify-start'} ${
+        className={`message-row relative flex ${isFromMe ? 'justify-end' : 'justify-start'} ${
           isLastOfRun ? 'mb-2' : 'mb-0.5'
         } ${reactions.length > 0 ? 'mt-6' : ''}`}
       >
