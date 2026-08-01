@@ -13,6 +13,8 @@ import type {
   ConversationAvailability,
 } from "./types";
 
+import { decodeAttributedBody } from "./decodeAttributedBody";
+
 export function getAllConversations(
   phoneNumber?: string,
   handleIds?: string[],
@@ -297,8 +299,16 @@ export function getMessagesForConversation(
     // Get reactions from the pre-built map (instant lookup!)
     const reactions = reactionsMap.get((msg as Message).guid) || [];
 
+    const typedMsg = msg as Message;
+    if (!typedMsg.text || typedMsg.text.trim() === "") {
+      const decoded = decodeAttributedBody(typedMsg.attributedBody);
+      if (decoded) {
+        typedMsg.text = decoded;
+      }
+    }
+
     return {
-      message: msg as Message,
+      message: typedMsg,
       handle,
       attachments,
       reactions,
