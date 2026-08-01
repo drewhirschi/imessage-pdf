@@ -1,6 +1,6 @@
 {
   "name": "imessage-pdf",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Browse local iMessage history and export conversations as printable books.",
   "author": "Drew Hirschi",
   "private": true,

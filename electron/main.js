@@ -199,7 +199,7 @@ ipcMain.handle('export-pdf', async (event, body) => {
     });
 
     const options = mapPrintOptions(body);
-    sendProgress({ percent: 88, stage: 'Rendering PDF', detail: 'Chromium is laying out and drawing every page…', pageEstimate });
+    sendProgress({ percent: 88, stage: 'Rendering PDF', detail: 'Chromium is laying out and drawing every page. This may take a few minutes…', pageEstimate });
     const pdfData = await printWin.webContents.printToPDF(options);
 
     sendProgress({ percent: 96, stage: 'Ready to save', detail: 'Choose where to save the completed PDF.', pageEstimate });
@@ -273,7 +273,7 @@ async function waitForPrintReady(webContents, onProgress = () => {}, timeoutMs =
     onProgress({
       percent: Math.round(30 + ratio * 35),
       stage: 'Preparing media',
-      detail: 'Loading and converting images throughout the conversation…',
+      detail: 'Loading, converting, and caching images throughout the conversation…',
     });
   }
   await webContents.executeJavaScript('window.scrollTo(0, document.documentElement.scrollHeight)', true);

@@ -397,7 +397,7 @@ function ConversationPageInner() {
         throw new Error('Failed to generate PDF');
       }
 
-      setPdfProgress({ percent: 90, stage: 'Downloading PDF', detail: 'The browser renderer finished; preparing the file…' });
+      setPdfProgress({ percent: 90, stage: 'Downloading PDF', detail: 'The browser renderer finished; preparing the file. This may take a few minutes…' });
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');

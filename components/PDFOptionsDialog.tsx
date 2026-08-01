@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, LoaderCircle } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -216,7 +216,12 @@ export default function PDFOptionsDialog({
           {(submitting || progress) && (
             <div className={`rounded-md border p-3 ${progress?.error ? 'border-red-300 bg-red-50' : 'border-blue-200 bg-blue-50'}`}>
               <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="font-medium text-gray-900">{progress?.stage ?? 'Starting export'}</span>
+                <span className="flex items-center gap-2 font-medium text-gray-900">
+                  {!progress?.error && submitting && (
+                    <LoaderCircle className="size-4 animate-spin text-blue-600" />
+                  )}
+                  {progress?.stage ?? 'Starting export'}
+                </span>
                 {!progress?.error && <span className="tabular-nums text-gray-600">{progress?.percent ?? 0}%</span>}
               </div>
               {!progress?.error && (
@@ -230,6 +235,11 @@ export default function PDFOptionsDialog({
               {progress?.detail && (
                 <p className={`mt-2 text-xs ${progress.error ? 'text-red-700' : 'text-gray-600'}`}>
                   {progress.detail}
+                </p>
+              )}
+              {!progress?.error && submitting && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Keep this window open. Large books may take a few minutes.
                 </p>
               )}
             </div>
