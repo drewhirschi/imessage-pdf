@@ -1,6 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
+import { CircleHelp } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 const FDA_DEEP_LINK =
   'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles';
@@ -98,6 +108,88 @@ export default function FullDiskAccessScreen({
           Everything stays on this machine — the database is opened{' '}
           <strong>read-only</strong> and nothing is uploaded.
         </p>
+
+        {isElectron && (
+          <Dialog>
+            <DialogTrigger asChild>
+              <button
+                type="button"
+                className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-blue-700 hover:text-blue-800 hover:underline"
+              >
+                <CircleHelp className="size-4" />
+                How do I do this?
+              </button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto p-0">
+              <DialogHeader className="border-b border-gray-200 px-6 py-5 pr-12">
+                <DialogTitle>Grant Full Disk Access</DialogTitle>
+                <DialogDescription>
+                  macOS requires you to add the app manually the first time.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-8 px-6 pb-6 pt-6">
+                <figure className="space-y-3">
+                  <figcaption className="flex items-start gap-3 text-sm text-gray-700">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-blue-600 font-semibold text-white">
+                      1
+                    </span>
+                    <span>
+                      In <strong>Full Disk Access</strong>, click the{' '}
+                      <strong>+</strong> below the app list.
+                    </span>
+                  </figcaption>
+                  <Image
+                    src="/onboarding/full-disk-access-add.png"
+                    alt="Full Disk Access settings with the plus button at the bottom of the application list"
+                    width={1400}
+                    height={1235}
+                    className="h-auto w-full rounded-md border border-gray-200"
+                  />
+                </figure>
+
+                <figure className="space-y-3">
+                  <figcaption className="flex items-start gap-3 text-sm text-gray-700">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-blue-600 font-semibold text-white">
+                      2
+                    </span>
+                    <span>
+                      Open <strong>Applications</strong>, select{' '}
+                      <strong>iMessage PDF Exporter</strong>, and click{' '}
+                      <strong>Open</strong>. Then enable its switch.
+                    </span>
+                  </figcaption>
+                  <Image
+                    src="/onboarding/full-disk-access-select-app.png"
+                    alt="Applications folder with iMessage PDF Exporter selected and ready to open"
+                    width={1400}
+                    height={790}
+                    className="h-auto w-full rounded-md border border-gray-200"
+                  />
+                </figure>
+
+                <figure className="space-y-3">
+                  <figcaption className="flex items-start gap-3 text-sm text-gray-700">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-blue-600 font-semibold text-white">
+                      3
+                    </span>
+                    <span>
+                      When macOS asks, choose <strong>Quit &amp; Reopen</strong>.
+                      The app will restart with access to your Messages library.
+                    </span>
+                  </figcaption>
+                  <Image
+                    src="/onboarding/full-disk-access-reopen.png"
+                    alt="macOS confirmation asking to quit and reopen iMessage PDF Exporter"
+                    width={1400}
+                    height={1235}
+                    className="h-auto w-full rounded-md border border-gray-200"
+                  />
+                </figure>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
 
         {dbPath && (
           <p className="text-sm text-gray-500 mb-4">
