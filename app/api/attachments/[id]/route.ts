@@ -5,7 +5,6 @@ import fs from "fs";
 import path from "path";
 import convert from "heic-convert";
 import { inlineContentDisposition } from "@/lib/http/content-disposition";
-import { getImagePreview } from "@/lib/attachments/image-preview";
 
 export async function GET(
   request: NextRequest,
@@ -78,6 +77,9 @@ export async function GET(
 
     if (preview && previewableExtensions.has(ext)) {
       try {
+        // Keep Sharp out of the route's initialization path so raw videos and
+        // other attachments still stream if image preview support is missing.
+        const { getImagePreview } = await import("@/lib/attachments/image-preview");
         fileBuffer = await getImagePreview(fullPath, ext);
         contentType = "image/webp";
       } catch (error) {

@@ -24,6 +24,29 @@ function copyDir(from, to) {
   console.log(`[prepare-standalone] copied ${from} -> ${to}`);
 }
 
+function copySharpRuntime() {
+  if (process.platform !== 'darwin' || process.arch !== 'arm64') return;
+
+  const sharpEntry = require.resolve('sharp');
+  const sharpRoot = path.dirname(path.dirname(sharpEntry));
+  const optionalRoot = path.join(sharpRoot, '..', '@img');
+  const packages = [
+    'sharp-darwin-arm64',
+    'sharp-libvips-darwin-arm64',
+  ];
+
+  for (const packageName of packages) {
+    const linkedPath = path.join(optionalRoot, packageName);
+    if (!fs.existsSync(linkedPath)) {
+      throw new Error(`[prepare-standalone] missing Sharp runtime package: @img/${packageName}`);
+    }
+    copyDir(
+      fs.realpathSync(linkedPath),
+      path.join(standalone, 'node_modules', '@img', packageName),
+    );
+  }
+}
+
 function main() {
   if (!fs.existsSync(path.join(standalone, 'server.js'))) {
     console.error(
@@ -33,6 +56,7 @@ function main() {
   }
   copyDir(path.join(repoRoot, '.next', 'static'), path.join(standalone, '.next', 'static'));
   copyDir(path.join(repoRoot, 'public'), path.join(standalone, 'public'));
+  copySharpRuntime();
 }
 
 main();
