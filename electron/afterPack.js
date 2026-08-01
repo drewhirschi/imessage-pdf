@@ -22,6 +22,8 @@ module.exports = async function afterPack(context) {
       '-',
       '--identifier',
       'com.imessagepdf.exporter',
+      '--requirements',
+      '=designated => identifier "com.imessagepdf.exporter"',
       appPath,
     ],
     { encoding: 'utf8' },
